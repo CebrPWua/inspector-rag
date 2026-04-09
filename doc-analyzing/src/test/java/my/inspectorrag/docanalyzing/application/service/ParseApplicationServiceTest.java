@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -56,5 +58,35 @@ class ParseApplicationServiceTest {
 
         verify(parseRepository).updateParseStatus(2L, "failed");
         verify(parseRepository).markTaskStatus(eq(100L), eq("failed"), anyString());
+    }
+
+    @Test
+    void parseShouldSupportDocxFile() throws Exception {
+        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService);
+        Path docx = Files.createTempFile("law", ".docx");
+
+        try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(docx))) {
+            zos.putNextEntry(new ZipEntry("word/document.xml"));
+            zos.write("""
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                      <w:body>
+                        <w:p><w:r><w:t>第1条 施工单位应建立制度。</w:t></w:r></w:p>
+                      </w:body>
+                    </w:document>
+                    """.getBytes());
+            zos.closeEntry();
+        }
+
+        when(parseRepository.findPrimaryStoragePath(3L)).thenReturn(Optional.of(docx.toString()));
+        when(chunkingService.splitToChunks(anyString())).thenReturn(List.of(
+                new ParsedChunk("", "", "第1条", "", "第1条 施工单位应建立制度。", 1, "hash")
+        ));
+        when(parseRepository.createImportTask(anyLong(), eq(3L), eq("embed"), any())).thenReturn(889L);
+
+        var response = service.parse(new ParseTaskCommand(101L, 3L));
+
+        assertEquals(1, response.chunkCount());
+        assertEquals(889L, response.embedTaskId());
+        verify(chunkingService).splitToChunks(contains("第1条 施工单位应建立制度。"));
     }
 }

@@ -8,6 +8,7 @@ import my.inspectorrag.records.domain.repository.RecordsRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,8 +72,8 @@ public class JdbcRecordsRepository implements RecordsRepository {
                 (rs, rowNum) -> new QaReplayCandidate(
                         rs.getLong("chunk_id"),
                         rs.getString("source_type"),
-                        rs.getObject("raw_score", Double.class),
-                        rs.getObject("final_score", Double.class),
+                        toDouble(rs.getBigDecimal("raw_score")),
+                        toDouble(rs.getBigDecimal("final_score")),
                         rs.getObject("rank_no", Integer.class)
                 ),
                 qaId
@@ -96,5 +97,9 @@ public class JdbcRecordsRepository implements RecordsRepository {
                 ),
                 qaId
         );
+    }
+
+    private Double toDouble(BigDecimal value) {
+        return value == null ? null : value.doubleValue();
     }
 }

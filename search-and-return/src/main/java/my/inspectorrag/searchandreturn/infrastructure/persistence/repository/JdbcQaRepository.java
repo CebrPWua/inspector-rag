@@ -6,6 +6,7 @@ import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -176,13 +177,17 @@ public class JdbcQaRepository implements QaRepository {
                         rs.getString("law_name"),
                         rs.getString("article_no"),
                         rs.getString("quoted_text"),
-                        rs.getObject("final_score", Double.class),
+                        toDouble(rs.getBigDecimal("final_score")),
                         rs.getObject("page_start", Integer.class),
                         rs.getObject("page_end", Integer.class),
                         rs.getString("file_version")
                 ),
                 qaId
         );
+    }
+
+    private Double toDouble(BigDecimal value) {
+        return value == null ? null : value.doubleValue();
     }
 
     private String truncate(String content) {
