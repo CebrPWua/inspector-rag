@@ -1,0 +1,18 @@
+[versions]
+# 统一定义版本号
+spring-boot = "4.0.5"
+lombok = "1.8.44"
+junit = "4.13.2"
+spring-ai = "2.0.0-M4"
+
+[libraries]
+# 定义依赖别名
+junit-jupiter = {module = "org.junit.jupiter:junit-jupiter", version.ref = "junit"}
+lombok = {module = "org.projectlombok:lombok", version.ref = "lombok"}
+spring-boot-starter-web = {module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot"}
+spring-ai-model = {module = "org.springframework.ai:spring-ai-model", version.ref = "spring-ai"}
+spring-ai-vectorstore = {module = "org.springframework.ai:spring-ai-vector-store", version.ref = "spring-ai"}
+
+[plugins]
+# 定义插件别名
+spring-boot = {id = "org.springframework.boot", version.ref = "spring-boot"}
