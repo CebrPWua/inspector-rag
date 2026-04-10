@@ -3,6 +3,7 @@ package my.inspectorrag.taskscheduling.infrastructure.persistence.repository;
 import my.inspectorrag.taskscheduling.domain.model.DeadLetterTask;
 import my.inspectorrag.taskscheduling.domain.model.ImportTask;
 import my.inspectorrag.taskscheduling.domain.repository.TaskRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -10,6 +11,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcTaskRepository implements TaskRepository {
 
     private final JdbcTemplate jdbcTemplate;

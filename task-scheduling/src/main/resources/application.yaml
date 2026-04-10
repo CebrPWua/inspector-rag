@@ -17,9 +17,15 @@ management:
         include: health,info
 
 inspector:
+  persistence:
+    mode: ${PERSISTENCE_MODE:jdbc}
   task:
     claim-limit: ${TASK_CLAIM_LIMIT:10}
     worker-enabled: ${TASK_WORKER_ENABLED:true}
   internal-services:
     doc-analyzing-base-url: ${DOC_ANALYZING_BASE_URL:http://localhost:8082}
     embedding-base-url: ${EMBEDDING_BASE_URL:http://localhost:8083}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
