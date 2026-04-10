@@ -1,6 +1,7 @@
 package my.inspectorrag.embedding.infrastructure.config;
 
 import my.inspectorrag.embedding.domain.service.EmbeddingService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -11,6 +12,7 @@ import java.util.Locale;
 public class EmbeddingConfig {
 
     @Bean
+    @ConditionalOnProperty(prefix = "inspector.embedding", name = "provider", havingValue = "mock", matchIfMissing = true)
     public EmbeddingService embeddingService() {
         return (text, dimension) -> {
             double[] vector = new double[dimension];

@@ -1,6 +1,6 @@
-package my.inspectorrag.embedding.domain.model;
+package my.inspectorrag.embedding.infrastructure.persistence.mapper;
 
-public record PendingChunk(
+public record PendingChunkRow(
         Long chunkId,
         String lawName,
         String chapterTitle,

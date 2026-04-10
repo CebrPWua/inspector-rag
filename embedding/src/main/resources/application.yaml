@@ -6,6 +6,19 @@ spring:
     username: postgres
     password: 123456
     driver-class-name: org.postgresql.Driver
+  ai:
+    openai:
+      base-url: ${ONEAPI_BASE_URL:http://localhost:3000}
+      api-key: ${ONEAPI_API_KEY:}
+      embedding:
+        options:
+          model: ${EMBEDDING_MODEL_NAME:text-embedding-3-small}
+    vectorstore:
+      pgvector:
+        initialize-schema: ${SPRING_AI_PGVECTOR_INIT_SCHEMA:false}
+        table-name: ${SPRING_AI_PGVECTOR_TABLE:rag_law_chunk_store}
+        id-type: ${SPRING_AI_PGVECTOR_ID_TYPE:TEXT}
+        dimensions: ${EMBEDDING_MODEL_DIMENSION:1536}
 
 server:
   port: ${SERVER_PORT:8083}
@@ -17,7 +30,18 @@ management:
         include: health,info
 
 inspector:
+  persistence:
+    mode: ${PERSISTENCE_MODE:jdbc}
   embedding:
+    provider: ${EMBEDDING_PROVIDER:mock}
     model-name: ${EMBEDDING_MODEL_NAME:text-embedding-3-small}
     model-version: ${EMBEDDING_MODEL_VERSION:v1}
     dimension: ${EMBEDDING_MODEL_DIMENSION:1536}
+    oneapi:
+      base-url: ${ONEAPI_BASE_URL:http://localhost:3000}
+      api-key: ${ONEAPI_API_KEY:}
+    vector-store-sync-enabled: ${VECTOR_STORE_SYNC_ENABLED:false}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true

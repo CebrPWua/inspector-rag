@@ -4,6 +4,7 @@ import my.inspectorrag.embedding.application.command.EmbedTaskCommand;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
 import my.inspectorrag.embedding.domain.service.EmbeddingService;
+import my.inspectorrag.embedding.domain.service.VectorIndexService;
 import my.inspectorrag.embedding.interfaces.dto.EmbedTaskResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class EmbeddingApplicationService {
 
     private final EmbeddingRepository embeddingRepository;
     private final EmbeddingService embeddingService;
+    private final VectorIndexService vectorIndexService;
     private final String modelName;
     private final String modelVersion;
     private final int dimension;
@@ -25,12 +27,14 @@ public class EmbeddingApplicationService {
     public EmbeddingApplicationService(
             EmbeddingRepository embeddingRepository,
             EmbeddingService embeddingService,
+            VectorIndexService vectorIndexService,
             @Value("${inspector.embedding.model-name}") String modelName,
             @Value("${inspector.embedding.model-version}") String modelVersion,
             @Value("${inspector.embedding.dimension}") int dimension
     ) {
         this.embeddingRepository = embeddingRepository;
         this.embeddingService = embeddingService;
+        this.vectorIndexService = vectorIndexService;
         this.modelName = modelName;
         this.modelVersion = modelVersion;
         this.dimension = dimension;
@@ -54,6 +58,7 @@ public class EmbeddingApplicationService {
                         + "\n正文：" + nullSafe(chunk.content());
                 String vectorLiteral = embeddingService.toVectorLiteral(inputText, dimension);
                 embeddingRepository.upsertChunkEmbedding(newId(), chunk.chunkId(), modelId, modelVersion, vectorLiteral, now);
+                vectorIndexService.upsert(chunk);
                 embeddingRepository.markChunkStatus(chunk.chunkId(), "success");
                 processed++;
             }

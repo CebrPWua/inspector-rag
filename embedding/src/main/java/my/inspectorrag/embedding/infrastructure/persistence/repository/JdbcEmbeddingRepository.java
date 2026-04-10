@@ -2,6 +2,7 @@ package my.inspectorrag.embedding.infrastructure.persistence.repository;
 
 import my.inspectorrag.embedding.domain.model.PendingChunk;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -10,6 +11,7 @@ import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcEmbeddingRepository implements EmbeddingRepository {
 
     private final JdbcTemplate jdbcTemplate;
@@ -81,7 +83,11 @@ public class JdbcEmbeddingRepository implements EmbeddingRepository {
                                lc.chapter_title,
                                lc.section_title,
                                lc.article_no,
-                               lc.content
+                               lc.content,
+                               lc.page_start,
+                               lc.page_end,
+                               sd.version_no,
+                               lc.status
                           from ingest.law_chunk lc
                           join ingest.source_document sd on sd.id = lc.doc_id
                          where lc.doc_id = ?
@@ -95,7 +101,11 @@ public class JdbcEmbeddingRepository implements EmbeddingRepository {
                         rs.getString("chapter_title"),
                         rs.getString("section_title"),
                         rs.getString("article_no"),
-                        rs.getString("content")
+                        rs.getString("content"),
+                        rs.getObject("page_start", Integer.class),
+                        rs.getObject("page_end", Integer.class),
+                        rs.getString("version_no"),
+                        rs.getString("status")
                 ),
                 docId,
                 limit
