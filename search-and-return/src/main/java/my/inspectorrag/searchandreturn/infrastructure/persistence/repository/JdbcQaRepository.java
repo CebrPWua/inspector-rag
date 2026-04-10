@@ -3,6 +3,7 @@ package my.inspectorrag.searchandreturn.infrastructure.persistence.repository;
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcQaRepository implements QaRepository {
 
     private final JdbcTemplate jdbcTemplate;

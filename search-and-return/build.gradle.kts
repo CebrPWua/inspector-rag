@@ -15,11 +15,16 @@ java {
 
 dependencies {
     implementation(platform("org.springframework.boot:spring-boot-dependencies:4.0.5"))
+    implementation(platform("org.springframework.ai:spring-ai-bom:2.0.0-M4"))
 
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("com.baomidou:mybatis-plus-spring-boot3-starter:3.5.7")
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("org.springframework.ai:spring-ai-starter-model-openai")
+    implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")

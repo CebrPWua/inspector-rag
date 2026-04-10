@@ -2,8 +2,9 @@ package my.inspectorrag.searchandreturn.application.service;
 
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
+import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
-import my.inspectorrag.searchandreturn.domain.service.MockEmbeddingService;
+import my.inspectorrag.searchandreturn.domain.service.RecallService;
 import my.inspectorrag.searchandreturn.interfaces.dto.AskResponse;
 import my.inspectorrag.searchandreturn.interfaces.dto.EvidenceDto;
 import my.inspectorrag.searchandreturn.interfaces.dto.QaDetailResponse;
@@ -19,18 +20,21 @@ import java.util.concurrent.ThreadLocalRandom;
 public class QaApplicationService {
 
     private final QaRepository qaRepository;
-    private final MockEmbeddingService embeddingService;
+    private final RecallService recallService;
+    private final AnswerGenerator answerGenerator;
     private final String embeddingModelName;
     private final int topK;
 
     public QaApplicationService(
             QaRepository qaRepository,
-            MockEmbeddingService embeddingService,
+            RecallService recallService,
+            AnswerGenerator answerGenerator,
             @Value("${inspector.embedding.model-name}") String embeddingModelName,
             @Value("${inspector.embedding.top-k}") int topK
     ) {
         this.qaRepository = qaRepository;
-        this.embeddingService = embeddingService;
+        this.recallService = recallService;
+        this.answerGenerator = answerGenerator;
         this.embeddingModelName = embeddingModelName;
         this.topK = topK;
     }
@@ -39,13 +43,12 @@ public class QaApplicationService {
     public AskResponse ask(String question) {
         long start = System.currentTimeMillis();
         String normalized = normalizeQuestion(question);
-        String vectorLiteral = embeddingService.toVectorLiteral(normalized, 1536);
-        List<RecallCandidate> candidates = qaRepository.vectorRecall(vectorLiteral, topK);
+        List<RecallCandidate> candidates = recallService.recall(normalized, topK);
         if (candidates.isEmpty()) {
             throw new IllegalArgumentException("no evidence found for current question");
         }
 
-        String answer = buildAnswer(normalized, candidates);
+        String answer = answerGenerator.generate(normalized, candidates);
         OffsetDateTime now = OffsetDateTime.now();
         Long qaId = newId();
         qaRepository.insertQaRecord(qaId, question, normalized, answer, (int) (System.currentTimeMillis() - start), now);
@@ -89,24 +92,6 @@ public class QaApplicationService {
 
     private String normalizeQuestion(String question) {
         return question == null ? "" : question.trim().replaceAll("\\s+", " ");
-    }
-
-    private String buildAnswer(String normalizedQuestion, List<RecallCandidate> candidates) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("问题描述：").append(normalizedQuestion).append("\n\n法规依据：\n");
-        for (int i = 0; i < candidates.size(); i++) {
-            RecallCandidate c = candidates.get(i);
-            sb.append(i + 1)
-                    .append(". 《")
-                    .append(c.lawName())
-                    .append("》 ")
-                    .append(c.articleNo())
-                    .append("：")
-                    .append(c.content())
-                    .append("\n");
-        }
-        sb.append("\n风险说明：请结合现场进一步核验并整改。\n整改建议：优先按上述条款执行，并保留整改记录。\n");
-        return sb.toString();
     }
 
     private Long newId() {

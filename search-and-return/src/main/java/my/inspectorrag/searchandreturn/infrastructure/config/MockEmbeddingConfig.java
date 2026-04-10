@@ -1,6 +1,7 @@
 package my.inspectorrag.searchandreturn.infrastructure.config;
 
 import my.inspectorrag.searchandreturn.domain.service.MockEmbeddingService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -11,6 +12,7 @@ import java.util.Locale;
 public class MockEmbeddingConfig {
 
     @Bean
+    @ConditionalOnProperty(prefix = "inspector.ai", name = "provider", havingValue = "mock", matchIfMissing = true)
     public MockEmbeddingService mockEmbeddingService() {
         return (text, dimension) -> {
             double[] vector = new double[dimension];
