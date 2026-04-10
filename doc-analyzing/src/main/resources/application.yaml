@@ -15,3 +15,23 @@ management:
     web:
       exposure:
         include: health,info
+
+inspector:
+  persistence:
+    mode: ${PERSISTENCE_MODE:jdbc}
+  storage:
+    mode: ${STORAGE_MODE:local}
+    rustfs:
+      endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+      access-key: ${RUSTFS_ACCESS_KEY:rustfsadmin}
+      secret-key: ${RUSTFS_SECRET_KEY:rustfsadmin}
+      bucket: ${RUSTFS_BUCKET:inspector-rag}
+  parsing:
+    docling:
+      enabled: ${DOCLING_ENABLED:false}
+      base-url: ${DOCLING_BASE_URL:http://localhost:5001}
+      extract-path: ${DOCLING_EXTRACT_PATH:/api/extract}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true

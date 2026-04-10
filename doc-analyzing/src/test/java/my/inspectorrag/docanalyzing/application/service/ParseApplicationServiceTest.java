@@ -4,6 +4,8 @@ import my.inspectorrag.docanalyzing.application.command.ParseTaskCommand;
 import my.inspectorrag.docanalyzing.domain.model.ParsedChunk;
 import my.inspectorrag.docanalyzing.domain.repository.ParseRepository;
 import my.inspectorrag.docanalyzing.domain.service.ChunkingService;
+import my.inspectorrag.docanalyzing.domain.service.DoclingGateway;
+import my.inspectorrag.docanalyzing.domain.service.SourceDocumentGateway;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,14 +29,19 @@ class ParseApplicationServiceTest {
     private ParseRepository parseRepository;
     @Mock
     private ChunkingService chunkingService;
+    @Mock
+    private SourceDocumentGateway sourceDocumentGateway;
+    @Mock
+    private DoclingGateway doclingGateway;
 
     @Test
     void parseShouldWriteChunksAndCreateEmbedTask() throws Exception {
-        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService);
+        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService, sourceDocumentGateway, doclingGateway);
         Path temp = Files.createTempFile("law", ".txt");
         Files.writeString(temp, "第1条 测试内容");
 
         when(parseRepository.findPrimaryStoragePath(1L)).thenReturn(Optional.of(temp.toString()));
+        when(sourceDocumentGateway.read(temp.toString())).thenReturn(Files.readAllBytes(temp));
         when(chunkingService.splitToChunks(anyString())).thenReturn(List.of(
                 new ParsedChunk("", "", "第1条", "", "第1条 测试内容", 1, "hash")
         ));
@@ -51,7 +58,7 @@ class ParseApplicationServiceTest {
 
     @Test
     void parseShouldFailWhenStoragePathMissing() {
-        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService);
+        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService, sourceDocumentGateway, doclingGateway);
         when(parseRepository.findPrimaryStoragePath(2L)).thenReturn(Optional.empty());
 
         assertThrows(IllegalArgumentException.class, () -> service.parse(new ParseTaskCommand(100L, 2L)));
@@ -62,7 +69,7 @@ class ParseApplicationServiceTest {
 
     @Test
     void parseShouldSupportDocxFile() throws Exception {
-        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService);
+        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService, sourceDocumentGateway, doclingGateway);
         Path docx = Files.createTempFile("law", ".docx");
 
         try (ZipOutputStream zos = new ZipOutputStream(Files.newOutputStream(docx))) {
@@ -78,6 +85,7 @@ class ParseApplicationServiceTest {
         }
 
         when(parseRepository.findPrimaryStoragePath(3L)).thenReturn(Optional.of(docx.toString()));
+        when(sourceDocumentGateway.read(docx.toString())).thenReturn(Files.readAllBytes(docx));
         when(chunkingService.splitToChunks(anyString())).thenReturn(List.of(
                 new ParsedChunk("", "", "第1条", "", "第1条 施工单位应建立制度。", 1, "hash")
         ));
@@ -88,5 +96,25 @@ class ParseApplicationServiceTest {
         assertEquals(1, response.chunkCount());
         assertEquals(889L, response.embedTaskId());
         verify(chunkingService).splitToChunks(contains("第1条 施工单位应建立制度。"));
+    }
+
+    @Test
+    void parseShouldFallbackToDoclingWhenPdfTextUnavailable() {
+        ParseApplicationService service = new ParseApplicationService(parseRepository, chunkingService, sourceDocumentGateway, doclingGateway);
+        String storagePath = "s3://rag/laws/4/sample.pdf";
+
+        when(parseRepository.findPrimaryStoragePath(4L)).thenReturn(Optional.of(storagePath));
+        when(sourceDocumentGateway.read(storagePath)).thenReturn(new byte[]{0x01, 0x02, 0x03});
+        when(doclingGateway.extractText(any(), eq("sample.pdf"))).thenReturn("第2条 监督范围包括施工和监理。");
+        when(chunkingService.splitToChunks(contains("第2条 监督范围包括施工和监理。"))).thenReturn(List.of(
+                new ParsedChunk("", "", "第2条", "", "第2条 监督范围包括施工和监理。", 1, "hash")
+        ));
+        when(parseRepository.createImportTask(anyLong(), eq(4L), eq("embed"), any())).thenReturn(890L);
+
+        var response = service.parse(new ParseTaskCommand(102L, 4L));
+
+        assertEquals(1, response.chunkCount());
+        assertEquals(890L, response.embedTaskId());
+        verify(doclingGateway).extractText(any(), eq("sample.pdf"));
     }
 }

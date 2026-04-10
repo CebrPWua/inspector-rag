@@ -2,6 +2,7 @@ package my.inspectorrag.docanalyzing.infrastructure.persistence.repository;
 
 import my.inspectorrag.docanalyzing.domain.model.ParsedChunk;
 import my.inspectorrag.docanalyzing.domain.repository.ParseRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -9,6 +10,7 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcParseRepository implements ParseRepository {
 
     private final JdbcTemplate jdbcTemplate;
