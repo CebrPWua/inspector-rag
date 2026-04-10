@@ -4,7 +4,7 @@ import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
-import my.inspectorrag.filemanagement.infrastructure.gateway.LocalObjectStorageGateway;
+import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,13 +25,13 @@ class FileApplicationServiceTest {
     @Mock
     private DocumentRepository documentRepository;
     @Mock
-    private LocalObjectStorageGateway localObjectStorageGateway;
+    private ObjectStorageGateway objectStorageGateway;
     @Mock
     private FileHashService fileHashService;
 
     @Test
     void uploadShouldReturnDuplicateWhenFileHashExists() {
-        FileApplicationService service = new FileApplicationService(documentRepository, localObjectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
         when(fileHashService.sha256(any())).thenReturn("hash1");
@@ -47,12 +47,12 @@ class FileApplicationServiceTest {
 
     @Test
     void uploadShouldCreateDocumentAndParseTaskWhenNewFile() {
-        FileApplicationService service = new FileApplicationService(documentRepository, localObjectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
         when(fileHashService.sha256(any())).thenReturn("hash2");
         when(documentRepository.findDocIdByFileHash("hash2")).thenReturn(Optional.empty());
-        when(localObjectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
+        when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
         when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9001L);
 
         UploadFileResponse response = service.upload(new UploadLawFileCommand(file, "法规", "LAW-2", "v1", "standard", "active"));
@@ -66,7 +66,7 @@ class FileApplicationServiceTest {
 
     @Test
     void getFileShouldMapDomainToDto() {
-        FileApplicationService service = new FileApplicationService(documentRepository, localObjectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
         OffsetDateTime now = OffsetDateTime.now();
         when(documentRepository.findFileDetail(77L)).thenReturn(Optional.of(
                 new FileDetail(77L, "法规", "LAW", "v1", "active", "pending", "law.txt", "hash", "/tmp/law.txt", now)

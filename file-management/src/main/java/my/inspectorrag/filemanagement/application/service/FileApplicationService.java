@@ -4,7 +4,7 @@ import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
-import my.inspectorrag.filemanagement.infrastructure.gateway.LocalObjectStorageGateway;
+import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.springframework.stereotype.Service;
@@ -13,7 +13,6 @@ import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
-import java.util.HexFormat;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -22,16 +21,16 @@ import java.util.concurrent.ThreadLocalRandom;
 public class FileApplicationService {
 
     private final DocumentRepository documentRepository;
-    private final LocalObjectStorageGateway localObjectStorageGateway;
+    private final ObjectStorageGateway objectStorageGateway;
     private final FileHashService fileHashService;
 
     public FileApplicationService(
             DocumentRepository documentRepository,
-            LocalObjectStorageGateway localObjectStorageGateway,
+            ObjectStorageGateway objectStorageGateway,
             FileHashService fileHashService
     ) {
         this.documentRepository = documentRepository;
-        this.localObjectStorageGateway = localObjectStorageGateway;
+        this.objectStorageGateway = objectStorageGateway;
         this.fileHashService = fileHashService;
     }
 
@@ -59,7 +58,7 @@ public class FileApplicationService {
         String sourceFileName = StringUtils.hasText(command.file().getOriginalFilename())
                 ? command.file().getOriginalFilename()
                 : "upload.bin";
-        String storagePath = localObjectStorageGateway.save(docId, sourceFileName, bytes);
+        String storagePath = objectStorageGateway.save(docId, sourceFileName, bytes);
 
         documentRepository.insertSourceDocument(
                 docId,

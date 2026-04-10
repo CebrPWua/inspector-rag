@@ -2,6 +2,7 @@ package my.inspectorrag.filemanagement.infrastructure.persistence.repository;
 
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -11,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.Optional;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcDocumentRepository implements DocumentRepository {
 
     private final JdbcTemplate jdbcTemplate;

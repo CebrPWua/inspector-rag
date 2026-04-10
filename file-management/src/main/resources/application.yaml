@@ -17,5 +17,17 @@ management:
         include: health,info
 
 inspector:
+  persistence:
+    mode: ${PERSISTENCE_MODE:jdbc}
   storage:
+    mode: ${STORAGE_MODE:local}
     root-dir: ${STORAGE_ROOT_DIR:/tmp/inspector-rag-storage}
+    rustfs:
+      endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
+      access-key: ${RUSTFS_ACCESS_KEY:rustfsadmin}
+      secret-key: ${RUSTFS_SECRET_KEY:rustfsadmin}
+      bucket: ${RUSTFS_BUCKET:inspector-rag}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true

@@ -1,5 +1,7 @@
 package my.inspectorrag.filemanagement.infrastructure.gateway;
 
+import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -9,7 +11,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @Component
-public class LocalObjectStorageGateway {
+@ConditionalOnProperty(prefix = "inspector.storage", name = "mode", havingValue = "local", matchIfMissing = true)
+public class LocalObjectStorageGateway implements ObjectStorageGateway {
 
     private final Path rootDir;
 
@@ -17,6 +20,7 @@ public class LocalObjectStorageGateway {
         this.rootDir = Paths.get(rootDir);
     }
 
+    @Override
     public String save(Long docId, String originalFilename, byte[] content) {
         try {
             Files.createDirectories(rootDir);
