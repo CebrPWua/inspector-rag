@@ -5,6 +5,7 @@ import my.inspectorrag.records.domain.model.QaReplay;
 import my.inspectorrag.records.domain.model.QaReplayCandidate;
 import my.inspectorrag.records.domain.model.QaReplayEvidence;
 import my.inspectorrag.records.domain.repository.RecordsRepository;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
+@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
 public class JdbcRecordsRepository implements RecordsRepository {
 
     private final JdbcTemplate jdbcTemplate;
