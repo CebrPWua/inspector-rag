@@ -43,7 +43,7 @@ public class OneApiEmbeddingService implements EmbeddingService {
         payload.put("model", modelName);
         payload.put("input", text);
         String body = restClient.post()
-                .uri("/v1/embeddings")
+                .uri("/embeddings")
                 .body(payload)
                 .retrieve()
                 .body(String.class);

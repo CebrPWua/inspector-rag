@@ -8,14 +8,14 @@ spring:
     driver-class-name: org.postgresql.Driver
   ai:
     openai:
-      base-url: ${ONEAPI_BASE_URL:http://localhost:3000}
-      api-key: ${ONEAPI_API_KEY:}
+      base-url: ${ONEAPI_BASE_URL:http://localhost:3000/v1}
+      api-key: ${ONEAPI_API_KEY:sk-hhxCWxLpjzIiOBoM58929361AcA94bEaA00a097dAb87455a}
       chat:
         options:
-          model: ${ONEAPI_CHAT_MODEL:gpt-5-mini}
+          model: ${ONEAPI_CHAT_MODEL:openai/gpt-5-mini}
       embedding:
         options:
-          model: ${EMBEDDING_MODEL_NAME:text-embedding-3-small}
+          model: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}
     vectorstore:
       pgvector:
         initialize-schema: ${SPRING_AI_PGVECTOR_INIT_SCHEMA:false}
@@ -38,14 +38,23 @@ inspector:
   ai:
     provider: ${AI_PROVIDER:mock}
     oneapi:
-      base-url: ${ONEAPI_BASE_URL:http://localhost:3000}
-      api-key: ${ONEAPI_API_KEY:}
-      chat-model: ${ONEAPI_CHAT_MODEL:gpt-5-mini}
+      base-url: ${ONEAPI_BASE_URL:http://localhost:3000/v1}
+      api-key: ${ONEAPI_API_KEY:sk-hhxCWxLpjzIiOBoM58929361AcA94bEaA00a097dAb87455a}
+      chat-model: ${ONEAPI_CHAT_MODEL:openai/gpt-5-mini}
   embedding:
-    model-name: ${EMBEDDING_MODEL_NAME:text-embedding-3-small}
+    model-name: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}
     top-k: ${QA_TOP_K:8}
   retrieval:
     provider: ${RETRIEVAL_PROVIDER:jdbc}
+    phase2:
+      keyword-topk: ${QA_KEYWORD_TOP_K:20}
+      final-topn: ${QA_FINAL_TOP_N:8}
+      fts-language: ${QA_FTS_LANGUAGE:simple}
+      weights:
+        vector: ${QA_WEIGHT_VECTOR:0.55}
+        keyword: ${QA_WEIGHT_KEYWORD:0.25}
+        title: ${QA_WEIGHT_TITLE:0.10}
+        tag: ${QA_WEIGHT_TAG:0.10}
 
 mybatis-plus:
   configuration:
