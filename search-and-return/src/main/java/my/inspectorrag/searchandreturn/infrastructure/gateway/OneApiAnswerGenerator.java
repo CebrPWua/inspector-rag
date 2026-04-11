@@ -7,10 +7,13 @@ import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +23,8 @@ import java.util.Map;
 @ConditionalOnProperty(prefix = "inspector.ai", name = "provider", havingValue = "oneapi")
 public class OneApiAnswerGenerator implements AnswerGenerator {
 
+    private static final Logger log = LoggerFactory.getLogger(OneApiAnswerGenerator.class);
+
     private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final String chatModel;
@@ -27,12 +32,18 @@ public class OneApiAnswerGenerator implements AnswerGenerator {
     public OneApiAnswerGenerator(
             @Value("${inspector.ai.oneapi.base-url}") String baseUrl,
             @Value("${inspector.ai.oneapi.api-key}") String apiKey,
-            @Value("${inspector.ai.oneapi.chat-model:gpt-5-mini}") String chatModel
+            @Value("${inspector.ai.oneapi.chat-model:gpt-5-mini}") String chatModel,
+            @Value("${inspector.ai.oneapi.connect-timeout-ms:5000}") int connectTimeoutMs,
+            @Value("${inspector.ai.oneapi.read-timeout-ms:120000}") int readTimeoutMs
     ) {
         this.objectMapper = JsonMapper.builder().findAndAddModules().build();
         this.chatModel = chatModel;
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(connectTimeoutMs);
+        requestFactory.setReadTimeout(readTimeoutMs);
         this.restClient = RestClient.builder()
                 .baseUrl(normalizeHttpUri(baseUrl))
+                .requestFactory(requestFactory)
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + apiKey)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
@@ -72,11 +83,19 @@ public class OneApiAnswerGenerator implements AnswerGenerator {
                 Map.of("role", "user", "content", prompt)
         ));
 
-        String body = restClient.post()
-                .uri("/v1/chat/completions")
-                .body(payload)
-                .retrieve()
-                .body(String.class);
+        long startedAt = System.currentTimeMillis();
+        final String body;
+        try {
+            body = restClient.post()
+                    .uri("/chat/completions")
+                    .body(payload)
+                    .retrieve()
+                    .body(String.class);
+        } catch (Exception ex) {
+            long elapsed = System.currentTimeMillis() - startedAt;
+            log.warn("oneapi chat request failed, model={}, elapsedMs={}", chatModel, elapsed, ex);
+            throw ex;
+        }
 
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -84,6 +103,8 @@ public class OneApiAnswerGenerator implements AnswerGenerator {
             if (content == null || content.isBlank()) {
                 throw new IllegalArgumentException("empty chat completion content");
             }
+            long elapsed = System.currentTimeMillis() - startedAt;
+            log.info("oneapi chat request succeeded, model={}, elapsedMs={}", chatModel, elapsed);
             return content;
         } catch (Exception ex) {
             throw new IllegalArgumentException("failed to parse oneapi chat completion response", ex);

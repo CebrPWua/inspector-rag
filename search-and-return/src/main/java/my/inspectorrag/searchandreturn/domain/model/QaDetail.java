@@ -10,6 +10,6 @@ public record QaDetail(
         String answer,
         String answerStatus,
         OffsetDateTime createdAt,
-        List<RecallCandidate> evidences
+        List<QaEvidence> evidences
 ) {
 }

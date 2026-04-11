@@ -1,5 +1,6 @@
 package my.inspectorrag.searchandreturn.infrastructure.gateway;
 
+import my.inspectorrag.searchandreturn.domain.model.QaFilters;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import my.inspectorrag.searchandreturn.domain.service.MockEmbeddingService;
@@ -22,8 +23,8 @@ public class JdbcRecallService implements RecallService {
     }
 
     @Override
-    public List<RecallCandidate> recall(String normalizedQuestion, int topK) {
+    public List<RecallCandidate> recall(String normalizedQuestion, int topK, QaFilters filters) {
         String vectorLiteral = embeddingService.toVectorLiteral(normalizedQuestion, 1536);
-        return qaRepository.vectorRecall(vectorLiteral, topK);
+        return qaRepository.vectorRecall(vectorLiteral, topK, filters);
     }
 }

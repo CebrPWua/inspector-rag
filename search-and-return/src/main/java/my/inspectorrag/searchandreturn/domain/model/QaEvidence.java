@@ -1,7 +1,7 @@
-package my.inspectorrag.searchandreturn.interfaces.dto;
+package my.inspectorrag.searchandreturn.domain.model;
 
-public record EvidenceDto(
-        int citeNo,
+public record QaEvidence(
+        Integer citeNo,
         Long chunkId,
         String lawName,
         String articleNo,

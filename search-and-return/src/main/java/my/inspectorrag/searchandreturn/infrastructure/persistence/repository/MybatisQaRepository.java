@@ -1,113 +1,102 @@
 package my.inspectorrag.searchandreturn.infrastructure.persistence.repository;
 
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
+import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
+import my.inspectorrag.searchandreturn.domain.model.QaFilters;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
-import my.inspectorrag.searchandreturn.infrastructure.persistence.mapper.QaCommandMapper;
-import my.inspectorrag.searchandreturn.infrastructure.persistence.mapper.QaQueryMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Primary
 @Repository
 @ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisQaRepository implements QaRepository {
 
-    private final QaCommandMapper commandMapper;
-    private final QaQueryMapper queryMapper;
+    private final JdbcQaRepository delegate;
 
-    public MybatisQaRepository(QaCommandMapper commandMapper, QaQueryMapper queryMapper) {
-        this.commandMapper = commandMapper;
-        this.queryMapper = queryMapper;
+    public MybatisQaRepository(JdbcTemplate jdbcTemplate) {
+        this.delegate = new JdbcQaRepository(jdbcTemplate);
     }
 
     @Override
-    public List<RecallCandidate> vectorRecall(String vectorLiteral, int topK) {
-        return queryMapper.vectorRecall(vectorLiteral, topK).stream()
-                .map(row -> new RecallCandidate(
-                        row.chunkId(),
-                        row.lawName(),
-                        row.articleNo(),
-                        truncate(row.content()),
-                        row.score(),
-                        row.pageStart(),
-                        row.pageEnd(),
-                        row.versionNo()
-                ))
-                .toList();
+    public List<RecallCandidate> vectorRecall(String vectorLiteral, int topK, QaFilters filters) {
+        return delegate.vectorRecall(vectorLiteral, topK, filters);
+    }
+
+    @Override
+    public List<RecallCandidate> keywordRecall(String normalizedQuestion, List<String> keywords, int topK, QaFilters filters, String ftsLanguage) {
+        return delegate.keywordRecall(normalizedQuestion, keywords, topK, filters, ftsLanguage);
+    }
+
+    @Override
+    public Set<Long> filterChunkIdsByMetadata(List<Long> chunkIds, QaFilters filters) {
+        return delegate.filterChunkIdsByMetadata(chunkIds, filters);
+    }
+
+    @Override
+    public Set<Long> findChunkIdsByIndustryTags(List<Long> chunkIds, List<String> industryTags) {
+        return delegate.findChunkIdsByIndustryTags(chunkIds, industryTags);
     }
 
     @Override
     public void insertQaRecord(Long id, String question, String normalizedQuestion, String answer, int elapsedMs, OffsetDateTime now) {
-        commandMapper.insertQaRecord(id, question, normalizedQuestion, answer, elapsedMs, now);
+        delegate.insertQaRecord(id, question, normalizedQuestion, answer, elapsedMs, now);
     }
 
     @Override
-    public void insertRetrievalSnapshot(Long id, Long qaId, String modelName, int topK, int topN, OffsetDateTime now) {
-        commandMapper.insertRetrievalSnapshot(id, qaId, modelName, topK, topN, now);
+    public void insertRejectedQaRecord(Long id, String question, String normalizedQuestion, String rejectReason, int elapsedMs, OffsetDateTime now) {
+        delegate.insertRejectedQaRecord(id, question, normalizedQuestion, rejectReason, elapsedMs, now);
     }
 
     @Override
-    public void insertCandidate(Long id, Long qaId, RecallCandidate candidate, int rankNo, OffsetDateTime now) {
-        commandMapper.insertCandidate(id, qaId, candidate.chunkId(), candidate.score(), rankNo, now);
+    public void insertRetrievalSnapshot(
+            Long id,
+            Long qaId,
+            String modelName,
+            int topK,
+            int topN,
+            String filtersJson,
+            String keywordQuery,
+            OffsetDateTime now
+    ) {
+        delegate.insertRetrievalSnapshot(id, qaId, modelName, topK, topN, filtersJson, keywordQuery, now);
+    }
+
+    @Override
+    public void insertCandidate(
+            Long id,
+            Long qaId,
+            Long chunkId,
+            String sourceType,
+            Double rawScore,
+            Double rerankScore,
+            Double finalScore,
+            int rankNo,
+            OffsetDateTime now
+    ) {
+        delegate.insertCandidate(id, qaId, chunkId, sourceType, rawScore, rerankScore, finalScore, rankNo, now);
     }
 
     @Override
     public void insertEvidence(Long id, Long qaId, RecallCandidate candidate, int citeNo, OffsetDateTime now) {
-        commandMapper.insertEvidence(
-                id,
-                qaId,
-                candidate.chunkId(),
-                citeNo,
-                candidate.content(),
-                candidate.lawName(),
-                candidate.articleNo(),
-                candidate.pageStart(),
-                candidate.pageEnd(),
-                candidate.versionNo(),
-                now
-        );
+        delegate.insertEvidence(id, qaId, candidate, citeNo, now);
     }
 
     @Override
     public Optional<QaDetail> findQaDetail(Long qaId) {
-        return Optional.ofNullable(queryMapper.findQaDetail(qaId))
-                .map(row -> new QaDetail(
-                        row.qaId(),
-                        row.question(),
-                        row.normalizedQuestion(),
-                        row.answer(),
-                        row.answerStatus(),
-                        row.createdAt(),
-                        findQaEvidences(qaId)
-                ));
+        return delegate.findQaDetail(qaId);
     }
 
     @Override
-    public List<RecallCandidate> findQaEvidences(Long qaId) {
-        return queryMapper.findQaEvidences(qaId).stream()
-                .map(row -> new RecallCandidate(
-                        row.chunkId(),
-                        row.lawName(),
-                        row.articleNo(),
-                        row.quotedText(),
-                        row.finalScore() == null ? null : row.finalScore().doubleValue(),
-                        row.pageStart(),
-                        row.pageEnd(),
-                        row.fileVersion()
-                ))
-                .toList();
-    }
-
-    private String truncate(String content) {
-        if (content == null) {
-            return "";
-        }
-        return content.length() <= 500 ? content : content.substring(0, 500);
+    public List<QaEvidence> findQaEvidences(Long qaId) {
+        return delegate.findQaEvidences(qaId);
     }
 }

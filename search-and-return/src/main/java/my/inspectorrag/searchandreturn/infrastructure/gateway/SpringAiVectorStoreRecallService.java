@@ -1,5 +1,6 @@
 package my.inspectorrag.searchandreturn.infrastructure.gateway;
 
+import my.inspectorrag.searchandreturn.domain.model.QaFilters;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.service.RecallService;
 import org.springframework.ai.document.Document;
@@ -21,7 +22,7 @@ public class SpringAiVectorStoreRecallService implements RecallService {
     }
 
     @Override
-    public List<RecallCandidate> recall(String normalizedQuestion, int topK) {
+    public List<RecallCandidate> recall(String normalizedQuestion, int topK, QaFilters filters) {
         List<Document> docs = vectorStore.similaritySearch(
                 SearchRequest.builder()
                         .query(normalizedQuestion)

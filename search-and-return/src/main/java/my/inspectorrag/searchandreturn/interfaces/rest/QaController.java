@@ -25,7 +25,7 @@ public class QaController {
 
     @PostMapping("/ask")
     public ApiResponse<AskResponse> ask(@Valid @RequestBody AskRequest request) {
-        return ApiResponse.ok(qaApplicationService.ask(request.question()));
+        return ApiResponse.ok(qaApplicationService.ask(request.question(), request.filters()));
     }
 
     @GetMapping("/{qaId}")
