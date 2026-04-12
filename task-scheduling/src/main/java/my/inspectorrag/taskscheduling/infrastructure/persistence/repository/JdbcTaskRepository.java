@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 @ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "jdbc", matchIfMissing = true)
@@ -113,12 +114,28 @@ public class JdbcTaskRepository implements TaskRepository {
     }
 
     @Override
+    public void markDeadLetterProcessingByTaskId(Long taskId) {
+        jdbcTemplate.update(
+                """
+                        update ops.dead_letter_task
+                           set resolution_status = 'processing',
+                               resolved_at = null,
+                               updated_at = now()
+                         where task_id = ?
+                           and resolution_status <> 'closed'
+                        """,
+                taskId
+        );
+    }
+
+    @Override
     public List<DeadLetterTask> listDeadLetterTasks() {
         return jdbcTemplate.query(
                 """
-                        select id, task_id, doc_id, task_type, last_error_msg, resolution_status, created_at
+                        select id, task_id, doc_id, task_type, last_error_msg, resolution_status,
+                               assigned_to, resolved_at, created_at, updated_at
                         from ops.dead_letter_task
-                        order by created_at desc
+                        order by updated_at desc, created_at desc
                         """,
                 (rs, rowNum) -> new DeadLetterTask(
                         rs.getLong("id"),
@@ -127,8 +144,66 @@ public class JdbcTaskRepository implements TaskRepository {
                         rs.getString("task_type"),
                         rs.getString("last_error_msg"),
                         rs.getString("resolution_status"),
-                        rs.getObject("created_at", OffsetDateTime.class)
+                        rs.getString("assigned_to"),
+                        rs.getObject("resolved_at", OffsetDateTime.class),
+                        rs.getObject("created_at", OffsetDateTime.class),
+                        rs.getObject("updated_at", OffsetDateTime.class)
                 )
+        );
+    }
+
+    @Override
+    public Optional<DeadLetterTask> findDeadLetterTask(Long deadLetterId) {
+        return jdbcTemplate.query(
+                """
+                        select id, task_id, doc_id, task_type, last_error_msg, resolution_status,
+                               assigned_to, resolved_at, created_at, updated_at
+                          from ops.dead_letter_task
+                         where id = ?
+                        """,
+                (rs, rowNum) -> new DeadLetterTask(
+                        rs.getLong("id"),
+                        rs.getLong("task_id"),
+                        rs.getLong("doc_id"),
+                        rs.getString("task_type"),
+                        rs.getString("last_error_msg"),
+                        rs.getString("resolution_status"),
+                        rs.getString("assigned_to"),
+                        rs.getObject("resolved_at", OffsetDateTime.class),
+                        rs.getObject("created_at", OffsetDateTime.class),
+                        rs.getObject("updated_at", OffsetDateTime.class)
+                ),
+                deadLetterId
+        ).stream().findFirst();
+    }
+
+    @Override
+    public void assignDeadLetterTask(Long deadLetterId, String assignedTo) {
+        jdbcTemplate.update(
+                """
+                        update ops.dead_letter_task
+                           set assigned_to = ?,
+                               updated_at = now()
+                         where id = ?
+                        """,
+                assignedTo,
+                deadLetterId
+        );
+    }
+
+    @Override
+    public void updateDeadLetterTaskStatus(Long deadLetterId, String status) {
+        jdbcTemplate.update(
+                """
+                        update ops.dead_letter_task
+                           set resolution_status = ?,
+                               resolved_at = case when ? in ('resolved', 'closed') then now() else null end,
+                               updated_at = now()
+                         where id = ?
+                        """,
+                status,
+                status,
+                deadLetterId
         );
     }
 }

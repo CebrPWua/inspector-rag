@@ -5,6 +5,7 @@ import my.inspectorrag.taskscheduling.domain.model.ImportTask;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface TaskRepository {
 
@@ -22,5 +23,13 @@ public interface TaskRepository {
 
     void retryTask(Long taskId);
 
+    void markDeadLetterProcessingByTaskId(Long taskId);
+
     List<DeadLetterTask> listDeadLetterTasks();
+
+    Optional<DeadLetterTask> findDeadLetterTask(Long deadLetterId);
+
+    void assignDeadLetterTask(Long deadLetterId, String assignedTo);
+
+    void updateDeadLetterTaskStatus(Long deadLetterId, String status);
 }

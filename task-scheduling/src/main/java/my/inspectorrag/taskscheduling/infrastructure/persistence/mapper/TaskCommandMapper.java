@@ -77,4 +77,31 @@ public interface TaskCommandMapper {
              where id = #{taskId}
             """)
     void retryTask(@Param("taskId") Long taskId);
+
+    @Update("""
+            update ops.dead_letter_task
+               set resolution_status = 'processing',
+                   resolved_at = null,
+                   updated_at = now()
+             where task_id = #{taskId}
+               and resolution_status <> 'closed'
+            """)
+    void markDeadLetterProcessingByTaskId(@Param("taskId") Long taskId);
+
+    @Update("""
+            update ops.dead_letter_task
+               set assigned_to = #{assignedTo},
+                   updated_at = now()
+             where id = #{deadLetterId}
+            """)
+    void assignDeadLetterTask(@Param("deadLetterId") Long deadLetterId, @Param("assignedTo") String assignedTo);
+
+    @Update("""
+            update ops.dead_letter_task
+               set resolution_status = #{status},
+                   resolved_at = case when #{status} in ('resolved', 'closed') then now() else null end,
+                   updated_at = now()
+             where id = #{deadLetterId}
+            """)
+    void updateDeadLetterTaskStatus(@Param("deadLetterId") Long deadLetterId, @Param("status") String status);
 }

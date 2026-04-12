@@ -13,9 +13,18 @@ public interface TaskQueryMapper {
     List<ImportTaskRow> claimTasks(@Param("limit") int limit);
 
     @Select("""
-            select id, task_id, doc_id, task_type, last_error_msg, resolution_status, created_at
+            select id, task_id, doc_id, task_type, last_error_msg, resolution_status,
+                   assigned_to, resolved_at, created_at, updated_at
               from ops.dead_letter_task
-             order by created_at desc
+             order by updated_at desc, created_at desc
             """)
     List<DeadLetterTaskRow> listDeadLetterTasks();
+
+    @Select("""
+            select id, task_id, doc_id, task_type, last_error_msg, resolution_status,
+                   assigned_to, resolved_at, created_at, updated_at
+              from ops.dead_letter_task
+             where id = #{deadLetterId}
+            """)
+    DeadLetterTaskRow findDeadLetterTask(@Param("deadLetterId") Long deadLetterId);
 }

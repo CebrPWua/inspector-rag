@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Primary
 @Repository
@@ -70,6 +71,11 @@ public class MybatisTaskRepository implements TaskRepository {
     }
 
     @Override
+    public void markDeadLetterProcessingByTaskId(Long taskId) {
+        commandMapper.markDeadLetterProcessingByTaskId(taskId);
+    }
+
+    @Override
     public List<DeadLetterTask> listDeadLetterTasks() {
         return queryMapper.listDeadLetterTasks().stream()
                 .map(row -> new DeadLetterTask(
@@ -79,8 +85,41 @@ public class MybatisTaskRepository implements TaskRepository {
                         row.taskType(),
                         row.lastErrorMsg(),
                         row.resolutionStatus(),
-                        row.createdAt()
+                        row.assignedTo(),
+                        row.resolvedAt(),
+                        row.createdAt(),
+                        row.updatedAt()
                 ))
                 .toList();
+    }
+
+    @Override
+    public Optional<DeadLetterTask> findDeadLetterTask(Long deadLetterId) {
+        var row = queryMapper.findDeadLetterTask(deadLetterId);
+        if (row == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new DeadLetterTask(
+                row.id(),
+                row.taskId(),
+                row.docId(),
+                row.taskType(),
+                row.lastErrorMsg(),
+                row.resolutionStatus(),
+                row.assignedTo(),
+                row.resolvedAt(),
+                row.createdAt(),
+                row.updatedAt()
+        ));
+    }
+
+    @Override
+    public void assignDeadLetterTask(Long deadLetterId, String assignedTo) {
+        commandMapper.assignDeadLetterTask(deadLetterId, assignedTo);
+    }
+
+    @Override
+    public void updateDeadLetterTaskStatus(Long deadLetterId, String status) {
+        commandMapper.updateDeadLetterTaskStatus(deadLetterId, status);
     }
 }

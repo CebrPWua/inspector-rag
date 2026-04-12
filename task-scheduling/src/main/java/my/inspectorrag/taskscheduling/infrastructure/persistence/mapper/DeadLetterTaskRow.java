@@ -9,6 +9,9 @@ public record DeadLetterTaskRow(
         String taskType,
         String lastErrorMsg,
         String resolutionStatus,
-        OffsetDateTime createdAt
+        String assignedTo,
+        OffsetDateTime resolvedAt,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
 ) {
 }
