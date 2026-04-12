@@ -33,6 +33,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class QaApplicationService {
 
     private static final int VECTOR_RECALL_MULTIPLIER = 3;
+    private static final String REJECT_USER_MESSAGE = "没有在数据库中找到合适的法律法规";
 
     private final QaRepository qaRepository;
     private final RecallService recallService;
@@ -126,7 +127,7 @@ public class QaApplicationService {
                     (int) (System.currentTimeMillis() - start),
                     now
             );
-            throw new NoEvidenceFoundException(rejectReason);
+            throw new NoEvidenceFoundException(REJECT_USER_MESSAGE);
         }
         String lowConfidenceRejectReason = evaluateLowConfidenceRejectReason(mergedCandidates);
         if (lowConfidenceRejectReason != null) {
@@ -139,7 +140,7 @@ public class QaApplicationService {
                     (int) (System.currentTimeMillis() - start),
                     now
             );
-            throw new NoEvidenceFoundException(lowConfidenceRejectReason);
+            throw new NoEvidenceFoundException(REJECT_USER_MESSAGE);
         }
 
         String answer = answerGenerator.generate(

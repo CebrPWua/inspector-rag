@@ -71,7 +71,8 @@ class QaApplicationServiceTest {
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of());
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
         ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
         verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
         assertEquals(true, rejectReasonCaptor.getValue().startsWith("NO_EVIDENCE:"));
@@ -86,7 +87,8 @@ class QaApplicationServiceTest {
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
         ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
         verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
         assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_TOP1_SCORE:"));
@@ -104,7 +106,8 @@ class QaApplicationServiceTest {
                 new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.69, 1, 1, "v1")
         ));
 
-        assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
         ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
         verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
         assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_SCORE_GAP:"));
@@ -118,7 +121,8 @@ class QaApplicationServiceTest {
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        assertThrows(IllegalArgumentException.class, () -> service.ask("关键词命中", null));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("关键词命中", null));
+        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
         ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
         verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
         assertEquals(true, rejectReasonCaptor.getValue().startsWith("INSUFFICIENT_EVIDENCE_COUNT:"));
