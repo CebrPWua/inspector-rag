@@ -4,6 +4,8 @@ import my.inspectorrag.records.domain.model.QaRecordItem;
 import my.inspectorrag.records.domain.model.QaReplay;
 import my.inspectorrag.records.domain.model.QaReplayCandidate;
 import my.inspectorrag.records.domain.model.QaReplayEvidence;
+import my.inspectorrag.records.domain.model.QaQualityReport;
+import my.inspectorrag.records.domain.model.RejectReasonStat;
 import my.inspectorrag.records.domain.repository.RecordsRepository;
 import my.inspectorrag.records.infrastructure.persistence.mapper.RecordsQueryMapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -12,6 +14,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.OffsetDateTime;
 
 @Primary
 @Repository
@@ -69,5 +72,27 @@ public class MybatisRecordsRepository implements RecordsRepository {
                 candidates,
                 evidences
         ));
+    }
+
+    @Override
+    public QaQualityReport qualityReport(OffsetDateTime from, OffsetDateTime to) {
+        var metrics = mapper.qualityMetrics(from, to);
+        if (metrics == null) {
+            return new QaQualityReport(0, 0, 0, 0, null, null, null, null, List.of());
+        }
+        List<RejectReasonStat> reasons = mapper.topRejectReasons(from, to).stream()
+                .map(it -> new RejectReasonStat(it.reasonCode(), it.cnt() == null ? 0L : it.cnt()))
+                .toList();
+        return new QaQualityReport(
+                metrics.total() == null ? 0L : metrics.total(),
+                metrics.success() == null ? 0L : metrics.success(),
+                metrics.reject() == null ? 0L : metrics.reject(),
+                metrics.failed() == null ? 0L : metrics.failed(),
+                metrics.avgElapsedMs(),
+                metrics.p95ElapsedMs(),
+                metrics.avgEvidenceCount(),
+                metrics.avgTop1FinalScore(),
+                reasons
+        );
     }
 }
