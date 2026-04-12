@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -47,6 +48,10 @@ public class QaApplicationService {
     private final double keywordWeight;
     private final double titleWeight;
     private final double tagWeight;
+    private final double minTop1Score;
+    private final double minTopGap;
+    private final double minConfidentScore;
+    private final int minEvidenceCount;
 
     public QaApplicationService(
             QaRepository qaRepository,
@@ -61,7 +66,11 @@ public class QaApplicationService {
             @Value("${inspector.retrieval.phase2.weights.vector:0.55}") double vectorWeight,
             @Value("${inspector.retrieval.phase2.weights.keyword:0.25}") double keywordWeight,
             @Value("${inspector.retrieval.phase2.weights.title:0.10}") double titleWeight,
-            @Value("${inspector.retrieval.phase2.weights.tag:0.10}") double tagWeight
+            @Value("${inspector.retrieval.phase2.weights.tag:0.10}") double tagWeight,
+            @Value("${inspector.retrieval.phase3.reject.min-top1-score:0.55}") double minTop1Score,
+            @Value("${inspector.retrieval.phase3.reject.min-top-gap:0.08}") double minTopGap,
+            @Value("${inspector.retrieval.phase3.reject.min-confident-score:0.70}") double minConfidentScore,
+            @Value("${inspector.retrieval.phase3.reject.min-evidence-count:2}") int minEvidenceCount
     ) {
         this.qaRepository = qaRepository;
         this.recallService = recallService;
@@ -77,6 +86,10 @@ public class QaApplicationService {
         this.keywordWeight = keywordWeight;
         this.titleWeight = titleWeight;
         this.tagWeight = tagWeight;
+        this.minTop1Score = minTop1Score;
+        this.minTopGap = minTopGap;
+        this.minConfidentScore = minConfidentScore;
+        this.minEvidenceCount = minEvidenceCount;
     }
 
     @Transactional(noRollbackFor = NoEvidenceFoundException.class)
@@ -100,7 +113,10 @@ public class QaApplicationService {
 
         List<MergedCandidate> mergedCandidates = mergeAndRank(normalized, filters, vectorCandidates, keywordCandidates);
         if (mergedCandidates.isEmpty()) {
-            String rejectReason = "no evidence found for current question";
+            String rejectReason = buildRejectReason(
+                    "NO_EVIDENCE",
+                    "no evidence found for current question"
+            );
             OffsetDateTime now = OffsetDateTime.now();
             qaRepository.insertRejectedQaRecord(
                     newId(),
@@ -111,6 +127,19 @@ public class QaApplicationService {
                     now
             );
             throw new NoEvidenceFoundException(rejectReason);
+        }
+        String lowConfidenceRejectReason = evaluateLowConfidenceRejectReason(mergedCandidates);
+        if (lowConfidenceRejectReason != null) {
+            OffsetDateTime now = OffsetDateTime.now();
+            qaRepository.insertRejectedQaRecord(
+                    newId(),
+                    question,
+                    normalized,
+                    lowConfidenceRejectReason,
+                    (int) (System.currentTimeMillis() - start),
+                    now
+            );
+            throw new NoEvidenceFoundException(lowConfidenceRejectReason);
         }
 
         String answer = answerGenerator.generate(
@@ -390,6 +419,44 @@ public class QaApplicationService {
 
     private String normalizeQuestion(String question) {
         return question == null ? "" : question.trim().replaceAll("\\s+", " ");
+    }
+
+    private String evaluateLowConfidenceRejectReason(List<MergedCandidate> mergedCandidates) {
+        if (mergedCandidates.size() < minEvidenceCount) {
+            return buildRejectReason(
+                    "INSUFFICIENT_EVIDENCE_COUNT",
+                    "required min evidence count=" + minEvidenceCount + ", actual=" + mergedCandidates.size()
+            );
+        }
+        double top1 = mergedCandidates.get(0).finalScore();
+        if (top1 < minTop1Score) {
+            return buildRejectReason(
+                    "LOW_TOP1_SCORE",
+                    "top1 final score=" + formatScore(top1) + " below threshold=" + formatScore(minTop1Score)
+            );
+        }
+        if (mergedCandidates.size() >= 2) {
+            double top2 = mergedCandidates.get(1).finalScore();
+            double gap = top1 - top2;
+            if (gap < minTopGap && top1 < minConfidentScore) {
+                return buildRejectReason(
+                        "LOW_SCORE_GAP",
+                        "top1-top2 gap=" + formatScore(gap)
+                                + " below threshold=" + formatScore(minTopGap)
+                                + " and top1=" + formatScore(top1)
+                                + " below confident threshold=" + formatScore(minConfidentScore)
+                );
+            }
+        }
+        return null;
+    }
+
+    private String buildRejectReason(String code, String detail) {
+        return code + ": " + detail;
+    }
+
+    private String formatScore(double value) {
+        return String.format(Locale.ROOT, "%.4f", value);
     }
 
     private Long newId() {

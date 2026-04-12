@@ -55,6 +55,12 @@ inspector:
         keyword: ${QA_WEIGHT_KEYWORD:0.25}
         title: ${QA_WEIGHT_TITLE:0.10}
         tag: ${QA_WEIGHT_TAG:0.10}
+    phase3:
+      reject:
+        min-top1-score: ${QA_REJECT_MIN_TOP1_SCORE:0.55}
+        min-top-gap: ${QA_REJECT_MIN_TOP_GAP:0.08}
+        min-confident-score: ${QA_REJECT_MIN_CONFIDENT_SCORE:0.70}
+        min-evidence-count: ${QA_REJECT_MIN_EVIDENCE_COUNT:2}
 
 mybatis-plus:
   configuration:
