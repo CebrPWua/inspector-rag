@@ -34,10 +34,11 @@ class EmbeddingApplicationServiceTest {
                 vectorIndexService,
                 "text-embedding-3-small",
                 "v1",
+                "mock",
                 8
         );
 
-        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), any()))
+        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), anyString(), any()))
                 .thenReturn(11L);
         when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
                 new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
@@ -62,10 +63,11 @@ class EmbeddingApplicationServiceTest {
                 vectorIndexService,
                 "text-embedding-3-small",
                 "v1",
+                "mock",
                 8
         );
 
-        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), any()))
+        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), anyString(), any()))
                 .thenReturn(11L);
         when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
                 new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")

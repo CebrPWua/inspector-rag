@@ -14,6 +14,8 @@ import my.inspectorrag.searchandreturn.interfaces.dto.AskFilters;
 import my.inspectorrag.searchandreturn.interfaces.dto.AskResponse;
 import my.inspectorrag.searchandreturn.interfaces.dto.EvidenceDto;
 import my.inspectorrag.searchandreturn.interfaces.dto.QaDetailResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +36,7 @@ public class QaApplicationService {
 
     private static final int VECTOR_RECALL_MULTIPLIER = 3;
     private static final String REJECT_USER_MESSAGE = "没有在数据库中找到合适的法律法规";
+    private static final Logger log = LoggerFactory.getLogger(QaApplicationService.class);
 
     private final QaRepository qaRepository;
     private final RecallService recallService;
@@ -45,11 +48,13 @@ public class QaApplicationService {
     private final int keywordTopK;
     private final int finalTopN;
     private final String ftsLanguage;
+    private final boolean scoreNormalizationEnabled;
     private final double vectorWeight;
     private final double keywordWeight;
     private final double titleWeight;
     private final double tagWeight;
     private final double minTop1Score;
+    private final double minTop1ScoreVectorOnly;
     private final double minTopGap;
     private final double minConfidentScore;
     private final int minEvidenceCount;
@@ -64,11 +69,13 @@ public class QaApplicationService {
             @Value("${inspector.retrieval.phase2.keyword-topk:20}") int keywordTopK,
             @Value("${inspector.retrieval.phase2.final-topn:8}") int finalTopN,
             @Value("${inspector.retrieval.phase2.fts-language:simple}") String ftsLanguage,
+            @Value("${inspector.retrieval.phase2.score-normalization.enabled:true}") boolean scoreNormalizationEnabled,
             @Value("${inspector.retrieval.phase2.weights.vector:0.55}") double vectorWeight,
             @Value("${inspector.retrieval.phase2.weights.keyword:0.25}") double keywordWeight,
             @Value("${inspector.retrieval.phase2.weights.title:0.10}") double titleWeight,
             @Value("${inspector.retrieval.phase2.weights.tag:0.10}") double tagWeight,
             @Value("${inspector.retrieval.phase3.reject.min-top1-score:0.55}") double minTop1Score,
+            @Value("${inspector.retrieval.phase3.reject.min-top1-score-vector-only:0.72}") double minTop1ScoreVectorOnly,
             @Value("${inspector.retrieval.phase3.reject.min-top-gap:0.08}") double minTopGap,
             @Value("${inspector.retrieval.phase3.reject.min-confident-score:0.70}") double minConfidentScore,
             @Value("${inspector.retrieval.phase3.reject.min-evidence-count:2}") int minEvidenceCount
@@ -83,11 +90,13 @@ public class QaApplicationService {
         this.keywordTopK = keywordTopK;
         this.finalTopN = finalTopN;
         this.ftsLanguage = ftsLanguage;
+        this.scoreNormalizationEnabled = scoreNormalizationEnabled;
         this.vectorWeight = vectorWeight;
         this.keywordWeight = keywordWeight;
         this.titleWeight = titleWeight;
         this.tagWeight = tagWeight;
         this.minTop1Score = minTop1Score;
+        this.minTop1ScoreVectorOnly = minTop1ScoreVectorOnly;
         this.minTopGap = minTopGap;
         this.minConfidentScore = minConfidentScore;
         this.minEvidenceCount = minEvidenceCount;
@@ -166,6 +175,17 @@ public class QaApplicationService {
             int rankNo = i + 1;
             int citeNo = i + 1;
             MergedCandidate merged = mergedCandidates.get(i);
+            log.info(
+                    "qa score before candidate persist: qaId={}, rankNo={}, chunkId={}, sourceType={}, rawWeightedScore={}, effectiveWeightSum={}, finalScore={}, normalizationEnabled={}",
+                    qaId,
+                    rankNo,
+                    merged.candidate().chunkId(),
+                    merged.sourceType(),
+                    formatScore(merged.rawWeightedScore()),
+                    formatScore(merged.effectiveWeightSum()),
+                    formatScore(merged.finalScore()),
+                    scoreNormalizationEnabled
+            );
             qaRepository.insertCandidate(
                     newId(),
                     qaId,
@@ -246,10 +266,28 @@ public class QaApplicationService {
         Double keywordScore = acc.keywordScore();
         double titleScore = computeTitleMatchScore(normalizedQuestion, acc.candidate());
         double tagScore = tagMatched ? 1.0 : 0.0;
-        double finalScore = vectorWeight * valueOrZero(vectorScore)
+        double rawWeightedScore = vectorWeight * valueOrZero(vectorScore)
                 + keywordWeight * valueOrZero(keywordScore)
                 + titleWeight * titleScore
                 + tagWeight * tagScore;
+        double effectiveWeightSum = 0d;
+        if (vectorScore != null) {
+            effectiveWeightSum += vectorWeight;
+        }
+        if (keywordScore != null) {
+            effectiveWeightSum += keywordWeight;
+        }
+        if (titleScore > 0d) {
+            effectiveWeightSum += titleWeight;
+        }
+        if (tagScore > 0d) {
+            effectiveWeightSum += tagWeight;
+        }
+        double finalScore = rawWeightedScore;
+        if (scoreNormalizationEnabled && effectiveWeightSum > 0d) {
+            finalScore = rawWeightedScore / effectiveWeightSum;
+        }
+        finalScore = valueOrZero(normalizeScore(finalScore));
 
         RecallCandidate finalCandidate = new RecallCandidate(
                 acc.candidate().chunkId(),
@@ -267,7 +305,9 @@ public class QaApplicationService {
                 sourceType(vectorScore, keywordScore),
                 Math.max(valueOrZero(vectorScore), valueOrZero(keywordScore)),
                 keywordScore,
-                finalScore
+                finalScore,
+                rawWeightedScore,
+                effectiveWeightSum
         );
     }
 
@@ -430,10 +470,11 @@ public class QaApplicationService {
             );
         }
         double top1 = mergedCandidates.get(0).finalScore();
-        if (top1 < minTop1Score) {
+        double threshold = minTop1ThresholdBySourceType(mergedCandidates.get(0).sourceType());
+        if (top1 < threshold) {
             return buildRejectReason(
                     "LOW_TOP1_SCORE",
-                    "top1 final score=" + formatScore(top1) + " below threshold=" + formatScore(minTop1Score)
+                    "top1 final score=" + formatScore(top1) + " below threshold=" + formatScore(threshold)
             );
         }
         if (mergedCandidates.size() >= 2) {
@@ -450,6 +491,13 @@ public class QaApplicationService {
             }
         }
         return null;
+    }
+
+    private double minTop1ThresholdBySourceType(String sourceType) {
+        if ("vector".equalsIgnoreCase(sourceType)) {
+            return minTop1ScoreVectorOnly;
+        }
+        return minTop1Score;
     }
 
     private String buildRejectReason(String code, String detail) {
@@ -489,7 +537,9 @@ public class QaApplicationService {
             String sourceType,
             Double rawScore,
             Double rerankScore,
-            Double finalScore
+            Double finalScore,
+            Double rawWeightedScore,
+            Double effectiveWeightSum
     ) {
     }
 }

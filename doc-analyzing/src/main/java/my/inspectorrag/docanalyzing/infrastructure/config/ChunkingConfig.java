@@ -48,7 +48,7 @@ public class ChunkingConfig {
                 int start = starts.get(i);
                 int end = i + 1 < starts.size() ? starts.get(i + 1) : normalized.length();
                 String block = normalized.substring(start, end).trim();
-                String articleNo = block.split("\\s", 2)[0];
+                String articleNo = extractArticleNo(block);
                 String content = truncate(block);
                 chunks.add(new ParsedChunk("", "", articleNo, "", content, i + 1, sha256(content)));
             }
@@ -62,6 +62,24 @@ public class ChunkingConfig {
             return content;
         }
         return content.substring(0, 1400);
+    }
+
+    private static String extractArticleNo(String block) {
+        if (block == null || block.isBlank()) {
+            return "第1条";
+        }
+        Matcher matcher = ARTICLE_PATTERN.matcher(block);
+        if (matcher.find()) {
+            String matched = matcher.group(1);
+            if (matched != null && !matched.isBlank()) {
+                return matched;
+            }
+        }
+        String fallback = block.split("\\s", 2)[0].trim();
+        if (fallback.isEmpty()) {
+            return "第1条";
+        }
+        return fallback.length() <= 64 ? fallback : fallback.substring(0, 64);
     }
 
     private static String sha256(String input) {

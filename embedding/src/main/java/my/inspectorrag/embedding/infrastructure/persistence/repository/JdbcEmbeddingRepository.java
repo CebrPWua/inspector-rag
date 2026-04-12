@@ -38,7 +38,7 @@ public class JdbcEmbeddingRepository implements EmbeddingRepository {
     }
 
     @Override
-    public Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, OffsetDateTime now) {
+    public Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, String provider, OffsetDateTime now) {
         Long existing = jdbcTemplate.query(
                 "select id from indexing.embedding_model where model_name = ? and version = ? limit 1",
                 (rs, rowNum) -> rs.getLong("id"),
@@ -54,7 +54,7 @@ public class JdbcEmbeddingRepository implements EmbeddingRepository {
         jdbcTemplate.update(
                 """
                         insert into indexing.embedding_model(id, model_name, dimension, version, provider, is_active, created_at, updated_at)
-                        values (?, ?, ?, ?, 'mock', true, ?, ?)
+                        values (?, ?, ?, ?, ?, true, ?, ?)
                         on conflict (model_name, version)
                         do update set is_active = excluded.is_active
                         """,
@@ -62,6 +62,7 @@ public class JdbcEmbeddingRepository implements EmbeddingRepository {
                 modelName,
                 dimension,
                 version,
+                provider,
                 now,
                 now
         );

@@ -31,7 +31,7 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
     }
 
     @Override
-    public Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, OffsetDateTime now) {
+    public Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, String provider, OffsetDateTime now) {
         Long existing = queryMapper.findEmbeddingModelId(modelName, version);
         if (existing != null) {
             commandMapper.activateEmbeddingModel(existing);
@@ -39,7 +39,7 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
         }
 
         Long id = newId();
-        commandMapper.insertOrActivateEmbeddingModel(id, modelName, version, dimension, now);
+        commandMapper.insertOrActivateEmbeddingModel(id, modelName, version, dimension, provider, now);
         return queryMapper.requireEmbeddingModelId(modelName, version);
     }
 

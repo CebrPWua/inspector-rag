@@ -70,11 +70,14 @@ public class JdbcQaRepository implements QaRepository {
 
     @Override
     public List<RecallCandidate> keywordRecall(String normalizedQuestion, List<String> keywords, int topK, QaFilters filters, String ftsLanguage) {
-        String keywordQuery = keywords == null || keywords.isEmpty() ? normalizedQuestion : String.join(" ", keywords);
-        if (keywordQuery == null || keywordQuery.isBlank()) {
+        List<String> queryTerms = toQueryTerms(normalizedQuestion, keywords);
+        if (queryTerms.isEmpty()) {
             return List.of();
         }
-        String likePattern = "%" + keywordQuery + "%";
+        String keywordOrQuery = String.join(" OR ", queryTerms);
+        String contentLikeExpr = buildIlikeOrExpression("lc.content", queryTerms.size());
+        String lawNameLikeExpr = buildIlikeOrExpression("sd.law_name", queryTerms.size());
+        String articleLikeExpr = buildIlikeOrExpression("coalesce(lc.article_no, '')", queryTerms.size());
 
         StringBuilder sql = new StringBuilder("""
                 select lc.id as chunk_id,
@@ -84,9 +87,9 @@ public class JdbcQaRepository implements QaRepository {
                        greatest(
                            ts_rank_cd(to_tsvector(cast(? as regconfig), coalesce(lc.content, '')),
                                       websearch_to_tsquery(cast(? as regconfig), ?)),
-                           case when lc.content ilike ? then 0.60 else 0 end,
-                           case when sd.law_name ilike ? then 0.80 else 0 end,
-                           case when coalesce(lc.article_no, '') ilike ? then 0.70 else 0 end
+                           case when %s then 0.60 else 0 end,
+                           case when %s then 0.80 else 0 end,
+                           case when %s then 0.70 else 0 end
                        ) as score,
                        lc.page_start,
                        lc.page_end,
@@ -97,26 +100,26 @@ public class JdbcQaRepository implements QaRepository {
                    and lc.status = 'active'
                    and (
                        to_tsvector(cast(? as regconfig), coalesce(lc.content, '')) @@ websearch_to_tsquery(cast(? as regconfig), ?)
-                       or lc.content ilike ?
-                       or sd.law_name ilike ?
-                       or coalesce(lc.article_no, '') ilike ?
+                       or %s
+                       or %s
+                       or %s
                    )
-                """);
+                """.formatted(contentLikeExpr, lawNameLikeExpr, articleLikeExpr, contentLikeExpr, lawNameLikeExpr, articleLikeExpr));
 
         List<Object> args = new ArrayList<>();
         args.add(ftsLanguage);
         args.add(ftsLanguage);
-        args.add(keywordQuery);
-        args.add(likePattern);
-        args.add(likePattern);
-        args.add(likePattern);
+        args.add(keywordOrQuery);
+        appendLikeArgs(args, queryTerms);
+        appendLikeArgs(args, queryTerms);
+        appendLikeArgs(args, queryTerms);
 
         args.add(ftsLanguage);
         args.add(ftsLanguage);
-        args.add(keywordQuery);
-        args.add(likePattern);
-        args.add(likePattern);
-        args.add(likePattern);
+        args.add(keywordOrQuery);
+        appendLikeArgs(args, queryTerms);
+        appendLikeArgs(args, queryTerms);
+        appendLikeArgs(args, queryTerms);
 
         appendMetadataFilter(sql, args, filters);
         sql.append(" order by score desc, lc.id asc limit ?");
@@ -136,6 +139,49 @@ public class JdbcQaRepository implements QaRepository {
                 ),
                 args.toArray()
         );
+    }
+
+    private List<String> toQueryTerms(String normalizedQuestion, List<String> keywords) {
+        LinkedHashSet<String> terms = new LinkedHashSet<>();
+        if (keywords != null) {
+            for (String keyword : keywords) {
+                addTerms(terms, keyword);
+            }
+        }
+        addTerms(terms, normalizedQuestion);
+        return terms.stream().limit(10).toList();
+    }
+
+    private void addTerms(Set<String> terms, String text) {
+        if (text == null || text.isBlank()) {
+            return;
+        }
+        String trimmed = text.trim();
+        if (trimmed.length() >= 2) {
+            terms.add(trimmed);
+        }
+        String[] split = trimmed.split("[\\s,，。;；:：()（）【】\\[\\]、]+");
+        for (String token : split) {
+            if (token == null) {
+                continue;
+            }
+            String cleaned = token.trim();
+            if (cleaned.length() >= 2) {
+                terms.add(cleaned);
+            }
+        }
+    }
+
+    private String buildIlikeOrExpression(String columnExpr, int termCount) {
+        return java.util.stream.IntStream.range(0, termCount)
+                .mapToObj(i -> columnExpr + " ilike ?")
+                .collect(Collectors.joining(" or ", "(", ")"));
+    }
+
+    private void appendLikeArgs(List<Object> args, List<String> terms) {
+        for (String term : terms) {
+            args.add("%" + term + "%");
+        }
     }
 
     @Override

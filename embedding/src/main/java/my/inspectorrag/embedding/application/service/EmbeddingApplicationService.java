@@ -22,6 +22,7 @@ public class EmbeddingApplicationService {
     private final VectorIndexService vectorIndexService;
     private final String modelName;
     private final String modelVersion;
+    private final String provider;
     private final int dimension;
 
     public EmbeddingApplicationService(
@@ -30,6 +31,7 @@ public class EmbeddingApplicationService {
             VectorIndexService vectorIndexService,
             @Value("${inspector.embedding.model-name}") String modelName,
             @Value("${inspector.embedding.model-version}") String modelVersion,
+            @Value("${inspector.embedding.provider}") String provider,
             @Value("${inspector.embedding.dimension}") int dimension
     ) {
         this.embeddingRepository = embeddingRepository;
@@ -37,6 +39,7 @@ public class EmbeddingApplicationService {
         this.vectorIndexService = vectorIndexService;
         this.modelName = modelName;
         this.modelVersion = modelVersion;
+        this.provider = provider;
         this.dimension = dimension;
     }
 
@@ -46,7 +49,7 @@ public class EmbeddingApplicationService {
 
         try {
             OffsetDateTime now = OffsetDateTime.now();
-            Long modelId = embeddingRepository.ensureActiveEmbeddingModel(modelName, modelVersion, dimension, now);
+            Long modelId = embeddingRepository.ensureActiveEmbeddingModel(modelName, modelVersion, dimension, provider, now);
             List<PendingChunk> chunks = embeddingRepository.findPendingChunks(command.docId(), 500);
 
             int processed = 0;

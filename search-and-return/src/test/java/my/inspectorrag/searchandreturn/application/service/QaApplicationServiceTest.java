@@ -98,12 +98,12 @@ class QaApplicationServiceTest {
     void askShouldRejectWhenScoreGapTooSmallAndTop1NotConfident() {
         QaApplicationService service = buildDefaultService();
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.70, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.69, 1, 1, "v1")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.69, 1, 1, "v1"),
+                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.68, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.70, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.69, 1, 1, "v1")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.69, 1, 1, "v1"),
+                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.68, 1, 1, "v1")
         ));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
@@ -126,6 +126,39 @@ class QaApplicationServiceTest {
         ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
         verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
         assertEquals(true, rejectReasonCaptor.getValue().startsWith("INSUFFICIENT_EVIDENCE_COUNT:"));
+    }
+
+    @Test
+    void askShouldPassWhenVectorOnlyScoreIsHighEnoughUnderVectorOnlyThreshold() {
+        QaApplicationService service = buildDefaultService();
+        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
+        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+                new RecallCandidate(100L, "法规高分", "第10条", "内容高分", 0.82, 1, 1, "v1"),
+                new RecallCandidate(101L, "法规次高分", "第11条", "内容次高分", 0.79, 1, 1, "v1")
+        ));
+        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
+
+        var response = service.ask("塔吊限位器失效需要立即停机吗", null);
+        assertNotNull(response.qaId());
+        assertEquals(2, response.evidences().size());
+        verify(qaRepository, never()).insertRejectedQaRecord(anyLong(), anyString(), anyString(), anyString(), anyInt(), any());
+    }
+
+    @Test
+    void askShouldRejectWhenVectorOnlyScoreIsBelowVectorOnlyThreshold() {
+        QaApplicationService service = buildDefaultService();
+        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+                new RecallCandidate(110L, "法规低分", "第20条", "内容低分", 0.62, 1, 1, "v1"),
+                new RecallCandidate(111L, "法规次低分", "第21条", "内容次低分", 0.61, 1, 1, "v1")
+        ));
+        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("临边防护栏杆要求", null));
+        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
+        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
+        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
+        assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_TOP1_SCORE:"));
+        assertEquals(true, rejectReasonCaptor.getValue().contains("threshold=0.7200"));
     }
 
     @Test
@@ -237,7 +270,7 @@ class QaApplicationServiceTest {
             double minConfidentScore,
             int minEvidenceCount
     ) {
-        return buildServiceWithRejectThresholds(minTop1Score, minTopGap, minConfidentScore, minEvidenceCount, 3, "jdbc");
+        return buildServiceWithRejectThresholds(minTop1Score, 0.72, minTopGap, minConfidentScore, minEvidenceCount, 3, "jdbc", true);
     }
 
     private QaApplicationService buildServiceWithRejectThresholds(
@@ -247,6 +280,28 @@ class QaApplicationServiceTest {
             int minEvidenceCount,
             int finalTopN,
             String retrievalProvider
+    ) {
+        return buildServiceWithRejectThresholds(
+                minTop1Score,
+                0.72,
+                minTopGap,
+                minConfidentScore,
+                minEvidenceCount,
+                finalTopN,
+                retrievalProvider,
+                true
+        );
+    }
+
+    private QaApplicationService buildServiceWithRejectThresholds(
+            double minTop1Score,
+            double minTop1ScoreVectorOnly,
+            double minTopGap,
+            double minConfidentScore,
+            int minEvidenceCount,
+            int finalTopN,
+            String retrievalProvider,
+            boolean scoreNormalizationEnabled
     ) {
         return new QaApplicationService(
                 qaRepository,
@@ -258,11 +313,13 @@ class QaApplicationServiceTest {
                 4,
                 finalTopN,
                 "simple",
+                scoreNormalizationEnabled,
                 0.55,
                 0.25,
                 0.10,
                 0.10,
                 minTop1Score,
+                minTop1ScoreVectorOnly,
                 minTopGap,
                 minConfidentScore,
                 minEvidenceCount

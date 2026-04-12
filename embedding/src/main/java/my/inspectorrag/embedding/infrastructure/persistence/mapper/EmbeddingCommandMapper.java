@@ -28,7 +28,7 @@ public interface EmbeddingCommandMapper {
 
     @Insert("""
             insert into indexing.embedding_model(id, model_name, dimension, version, provider, is_active, created_at, updated_at)
-            values (#{id}, #{modelName}, #{dimension}, #{version}, 'mock', true, #{now}, #{now})
+            values (#{id}, #{modelName}, #{dimension}, #{version}, #{provider}, true, #{now}, #{now})
             on conflict (model_name, version)
             do update set is_active = excluded.is_active
             """)
@@ -37,6 +37,7 @@ public interface EmbeddingCommandMapper {
             @Param("modelName") String modelName,
             @Param("version") String version,
             @Param("dimension") int dimension,
+            @Param("provider") String provider,
             @Param("now") OffsetDateTime now
     );
 

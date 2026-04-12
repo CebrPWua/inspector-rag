@@ -9,7 +9,7 @@ public interface EmbeddingRepository {
 
     void markTaskStatus(Long taskId, String status, String errorMsg);
 
-    Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, OffsetDateTime now);
+    Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, String provider, OffsetDateTime now);
 
     List<PendingChunk> findPendingChunks(Long docId, int limit);
 
