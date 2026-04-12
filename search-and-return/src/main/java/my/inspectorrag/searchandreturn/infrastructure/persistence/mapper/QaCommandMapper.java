@@ -25,8 +25,8 @@ public interface QaCommandMapper {
 
     @Insert("""
             insert into retrieval.qa_retrieval_snapshot
-            (id, qa_id, filters_json, query_embedding_model, topk_requested, topn_returned, created_at, updated_at)
-            values (#{id}, #{qaId}, '{}'::jsonb, #{modelName}, #{topK}, #{topN}, #{now}, #{now})
+            (id, qa_id, filters_json, query_embedding_model, topk_requested, topn_returned, keyword_query, created_at, updated_at)
+            values (#{id}, #{qaId}, #{filtersJson}::jsonb, #{modelName}, #{topK}, #{topN}, #{keywordQuery}, #{now}, #{now})
             """)
     void insertRetrievalSnapshot(
             @Param("id") Long id,
@@ -34,20 +34,39 @@ public interface QaCommandMapper {
             @Param("modelName") String modelName,
             @Param("topK") int topK,
             @Param("topN") int topN,
+            @Param("filtersJson") String filtersJson,
+            @Param("keywordQuery") String keywordQuery,
             @Param("now") OffsetDateTime now
     );
 
     @Insert("""
             insert into retrieval.qa_candidate
-            (id, qa_id, chunk_id, source_type, raw_score, final_score, rank_no, created_at, updated_at)
-            values (#{id}, #{qaId}, #{chunkId}, 'vector', #{score}, #{score}, #{rankNo}, #{now}, #{now})
+            (id, qa_id, chunk_id, source_type, raw_score, rerank_score, final_score, rank_no, created_at, updated_at)
+            values (#{id}, #{qaId}, #{chunkId}, #{sourceType}, #{rawScore}, #{rerankScore}, #{finalScore}, #{rankNo}, #{now}, #{now})
             """)
     void insertCandidate(
             @Param("id") Long id,
             @Param("qaId") Long qaId,
             @Param("chunkId") Long chunkId,
-            @Param("score") Double score,
+            @Param("sourceType") String sourceType,
+            @Param("rawScore") Double rawScore,
+            @Param("rerankScore") Double rerankScore,
+            @Param("finalScore") Double finalScore,
             @Param("rankNo") int rankNo,
+            @Param("now") OffsetDateTime now
+    );
+
+    @Insert("""
+            insert into retrieval.qa_record
+            (id, question, normalized_question, answer, answer_status, reject_reason, elapsed_ms, created_at, updated_at)
+            values (#{id}, #{question}, #{normalizedQuestion}, null, 'reject', #{rejectReason}, #{elapsedMs}, #{now}, #{now})
+            """)
+    void insertRejectedQaRecord(
+            @Param("id") Long id,
+            @Param("question") String question,
+            @Param("normalizedQuestion") String normalizedQuestion,
+            @Param("rejectReason") String rejectReason,
+            @Param("elapsedMs") int elapsedMs,
             @Param("now") OffsetDateTime now
     );
 

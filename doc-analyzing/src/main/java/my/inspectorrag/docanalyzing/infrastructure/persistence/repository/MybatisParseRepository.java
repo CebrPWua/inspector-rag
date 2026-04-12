@@ -4,7 +4,6 @@ import my.inspectorrag.docanalyzing.domain.model.ParsedChunk;
 import my.inspectorrag.docanalyzing.domain.repository.ParseRepository;
 import my.inspectorrag.docanalyzing.infrastructure.persistence.mapper.ParseCommandMapper;
 import my.inspectorrag.docanalyzing.infrastructure.persistence.mapper.ParseQueryMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +12,6 @@ import java.util.Optional;
 
 @Primary
 @Repository
-@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisParseRepository implements ParseRepository {
 
     private final ParseQueryMapper queryMapper;

@@ -30,8 +30,6 @@ management:
         include: health,info
 
 inspector:
-  persistence:
-    mode: ${PERSISTENCE_MODE:jdbc}
   embedding:
     provider: ${EMBEDDING_PROVIDER:springai}
     model-name: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}

@@ -17,8 +17,6 @@ management:
         include: health,info
 
 inspector:
-  persistence:
-    mode: ${PERSISTENCE_MODE:jdbc}
   task:
     claim-limit: ${TASK_CLAIM_LIMIT:10}
     worker-enabled: ${TASK_WORKER_ENABLED:true}

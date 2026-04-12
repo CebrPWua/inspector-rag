@@ -4,7 +4,6 @@ import my.inspectorrag.embedding.domain.model.PendingChunk;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
 import my.inspectorrag.embedding.infrastructure.persistence.mapper.EmbeddingCommandMapper;
 import my.inspectorrag.embedding.infrastructure.persistence.mapper.EmbeddingQueryMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
@@ -14,7 +13,6 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Primary
 @Repository
-@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisEmbeddingRepository implements EmbeddingRepository {
 
     private final EmbeddingCommandMapper commandMapper;

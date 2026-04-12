@@ -17,8 +17,6 @@ management:
         include: health,info
 
 inspector:
-  persistence:
-    mode: ${PERSISTENCE_MODE:jdbc}
   storage:
     mode: ${STORAGE_MODE:local}
     rustfs:

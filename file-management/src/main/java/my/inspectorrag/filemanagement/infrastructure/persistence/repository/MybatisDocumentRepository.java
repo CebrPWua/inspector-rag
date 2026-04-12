@@ -4,7 +4,6 @@ import my.inspectorrag.filemanagement.domain.model.FileDetail;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentCommandMapper;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentQueryMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
@@ -13,7 +12,6 @@ import java.util.Optional;
 
 @Primary
 @Repository
-@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisDocumentRepository implements DocumentRepository {
 
     private final DocumentCommandMapper commandMapper;

@@ -5,7 +5,6 @@ import my.inspectorrag.taskscheduling.domain.model.ImportTask;
 import my.inspectorrag.taskscheduling.domain.repository.TaskRepository;
 import my.inspectorrag.taskscheduling.infrastructure.persistence.mapper.TaskCommandMapper;
 import my.inspectorrag.taskscheduling.infrastructure.persistence.mapper.TaskQueryMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
@@ -15,7 +14,6 @@ import java.util.Optional;
 
 @Primary
 @Repository
-@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisTaskRepository implements TaskRepository {
 
     private final TaskQueryMapper queryMapper;

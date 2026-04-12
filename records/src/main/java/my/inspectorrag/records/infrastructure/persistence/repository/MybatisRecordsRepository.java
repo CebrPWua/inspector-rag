@@ -8,7 +8,6 @@ import my.inspectorrag.records.domain.model.QaQualityReport;
 import my.inspectorrag.records.domain.model.RejectReasonStat;
 import my.inspectorrag.records.domain.repository.RecordsRepository;
 import my.inspectorrag.records.infrastructure.persistence.mapper.RecordsQueryMapper;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
@@ -18,7 +17,6 @@ import java.time.OffsetDateTime;
 
 @Primary
 @Repository
-@ConditionalOnProperty(prefix = "inspector.persistence", name = "mode", havingValue = "mybatis")
 public class MybatisRecordsRepository implements RecordsRepository {
 
     private final RecordsQueryMapper mapper;
