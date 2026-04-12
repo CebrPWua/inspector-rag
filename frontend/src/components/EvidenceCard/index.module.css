@@ -1,0 +1,88 @@
+.card {
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #f0f0f0;
+  transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.highlighted {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.15);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.citeNo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: #1677ff;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.icon {
+  color: #1677ff;
+  font-size: 14px;
+}
+
+.lawName {
+  font-size: 13px;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.metaItem {
+  font-size: 12px;
+}
+
+.tag {
+  margin: 0;
+  font-size: 11px;
+  line-height: 18px;
+  padding: 0 6px;
+}
+
+.quoteBlock {
+  background: #fafafa;
+  border-left: 3px solid #d9d9d9;
+  padding: 8px 10px;
+  border-radius: 0 4px 4px 0;
+}
+
+.quoteText {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #555;
+  margin: 0 !important;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.expandBtn {
+  padding: 0;
+  height: auto;
+  font-size: 12px;
+  margin-top: 4px;
+}

@@ -39,3 +39,4 @@ out/
 
 # Local sensitive configs
 **/application-dev.yaml
+frontend/node_modules/

@@ -1,0 +1,90 @@
+.wrapper {
+  line-height: 1.8;
+  font-size: 14px;
+}
+
+.section {
+  margin-bottom: 16px;
+  border-radius: 6px;
+  padding: 12px 16px;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: #333;
+}
+
+.sectionContent {
+  color: #444;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 问题描述 - 灰色背景 */
+.sectionDesc {
+  background: #f8f8f8;
+  border-left: 4px solid #d9d9d9;
+}
+
+.sectionDesc .sectionTitle { color: #666; }
+
+/* 法规依据 - 蓝色 */
+.sectionLaw {
+  background: #f0f6ff;
+  border-left: 4px solid #1677ff;
+}
+
+.sectionLaw .sectionTitle { color: #1677ff; }
+
+/* 风险说明 - 橙色 */
+.sectionRisk {
+  background: #fffbe6;
+  border-left: 4px solid #faad14;
+}
+
+.sectionRisk .sectionTitle { color: #d48806; }
+
+/* 整改建议 - 绿色 */
+.sectionSuggest {
+  background: #f6ffed;
+  border-left: 4px solid #52c41a;
+}
+
+.sectionSuggest .sectionTitle { color: #389e0d; }
+
+/* 引用来源 */
+.sectionCite {
+  background: transparent;
+  font-size: 12px;
+  color: #888;
+  padding: 4px 0;
+}
+
+/* 原始文本 */
+.sectionRaw {
+  background: transparent;
+  padding: 0;
+}
+
+/* 可点击的引用序号 */
+:global(.cite-ref) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1677ff;
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 0 2px;
+  transition: background 0.2s;
+  vertical-align: middle;
+}
+
+:global(.cite-ref:hover) {
+  background: #0958d9;
+}
