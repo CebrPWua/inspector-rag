@@ -58,9 +58,9 @@ export default function FileDetailPage() {
         >
           <Descriptions.Item label="法规名称" span={2}>{data.lawName}</Descriptions.Item>
           <Descriptions.Item label="法规编码">
-            <Text code copyable>{data.lawCode}</Text>
+            {data.lawCode ? <Text code copyable>{data.lawCode}</Text> : <Text type="secondary">-</Text>}
           </Descriptions.Item>
-          <Descriptions.Item label="版本号">{data.versionNo}</Descriptions.Item>
+          <Descriptions.Item label="版本号">{data.versionNo || <Text type="secondary">-</Text>}</Descriptions.Item>
           <Descriptions.Item label="文档类型">{data.docType}</Descriptions.Item>
           <Descriptions.Item label="法规状态">
             {{

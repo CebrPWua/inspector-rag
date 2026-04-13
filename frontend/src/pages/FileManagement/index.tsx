@@ -61,9 +61,7 @@ export default function FileManagementPage() {
       if (values.lawCode?.trim()) {
         fd.append('lawCode', values.lawCode.trim())
       }
-      if (values.versionNo?.trim()) {
-        fd.append('versionNo', values.versionNo.trim())
-      }
+      fd.append('versionNo', values.versionNo?.trim() || 'v1')
       fd.append('docType', values.docType ?? 'standard')
       fd.append('status', values.status ?? 'active')
       doUpload(fd)
@@ -77,7 +75,7 @@ export default function FileManagementPage() {
       title: '法规编码',
       dataIndex: 'lawCode',
       width: 130,
-      render: (v: string) => (
+      render: (v: string | null) => (
         v
           ? <Text code copyable style={{ fontSize: 12 }}>{v}</Text>
           : <Text type="secondary">-</Text>
@@ -94,7 +92,7 @@ export default function FileManagementPage() {
       title: '版本',
       dataIndex: 'versionNo',
       width: 80,
-      render: (v: string) => v || <Text type="secondary">-</Text>,
+      render: (v: string | null) => v || <Text type="secondary">-</Text>,
     },
     {
       title: '法规状态',

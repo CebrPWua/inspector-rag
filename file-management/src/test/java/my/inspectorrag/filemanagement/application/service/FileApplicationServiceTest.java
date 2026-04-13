@@ -9,6 +9,7 @@ import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
@@ -62,8 +63,80 @@ class FileApplicationServiceTest {
         assertFalse(response.duplicate());
         assertNotNull(response.docId());
         assertEquals("9001", response.parseTaskId());
-        verify(documentRepository, times(1)).insertSourceDocument(anyLong(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
+        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
+        verify(documentRepository, times(1)).insertSourceDocument(
+                anyLong(),
+                anyString(),
+                lawCodeCaptor.capture(),
+                anyString(),
+                anyString(),
+                eq("hash2"),
+                versionNoCaptor.capture(),
+                anyString(),
+                any()
+        );
+        assertEquals("LAW-2", lawCodeCaptor.getValue());
+        assertEquals("v1", versionNoCaptor.getValue());
         verify(documentRepository, times(1)).insertDocumentFile(anyLong(), anyLong(), anyString(), anyString(), anyLong(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void uploadShouldFallbackLawCodeToFileHashAndVersionToV1WhenMissing() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
+
+        when(fileHashService.sha256(any())).thenReturn("hash3");
+        when(documentRepository.findDocIdByFileHash("hash3")).thenReturn(Optional.empty());
+        when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
+        when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9002L);
+
+        service.upload(new UploadLawFileCommand(file, "法规", null, null, "standard", "active"));
+
+        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
+        verify(documentRepository).insertSourceDocument(
+                anyLong(),
+                anyString(),
+                lawCodeCaptor.capture(),
+                anyString(),
+                anyString(),
+                eq("hash3"),
+                versionNoCaptor.capture(),
+                anyString(),
+                any()
+        );
+        assertEquals("hash3", lawCodeCaptor.getValue());
+        assertEquals("v1", versionNoCaptor.getValue());
+    }
+
+    @Test
+    void uploadShouldFallbackWhenLawCodeAndVersionAreBlank() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
+
+        when(fileHashService.sha256(any())).thenReturn("hash4");
+        when(documentRepository.findDocIdByFileHash("hash4")).thenReturn(Optional.empty());
+        when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
+        when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9003L);
+
+        service.upload(new UploadLawFileCommand(file, "法规", "   ", "   ", "standard", "active"));
+
+        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
+        verify(documentRepository).insertSourceDocument(
+                anyLong(),
+                anyString(),
+                lawCodeCaptor.capture(),
+                anyString(),
+                anyString(),
+                eq("hash4"),
+                versionNoCaptor.capture(),
+                anyString(),
+                any()
+        );
+        assertEquals("hash4", lawCodeCaptor.getValue());
+        assertEquals("v1", versionNoCaptor.getValue());
     }
 
     @Test

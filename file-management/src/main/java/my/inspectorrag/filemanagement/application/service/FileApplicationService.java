@@ -55,6 +55,14 @@ public class FileApplicationService {
         if (duplicateDocId.isPresent()) {
             return new UploadFileResponse(toIdString(duplicateDocId.get()), true, null);
         }
+        String effectiveLawCode = normalizeOptional(command.lawCode());
+        if (effectiveLawCode == null) {
+            effectiveLawCode = fileHash;
+        }
+        String effectiveVersionNo = normalizeOptional(command.versionNo());
+        if (effectiveVersionNo == null) {
+            effectiveVersionNo = "v1";
+        }
 
         OffsetDateTime now = OffsetDateTime.now();
         Long docId = newId();
@@ -66,11 +74,11 @@ public class FileApplicationService {
         documentRepository.insertSourceDocument(
                 docId,
                 command.lawName(),
-                command.lawCode(),
+                effectiveLawCode,
                 command.docType(),
                 sourceFileName,
                 fileHash,
-                command.versionNo(),
+                effectiveVersionNo,
                 command.status(),
                 now
         );
@@ -129,6 +137,10 @@ public class FileApplicationService {
 
     private String toIdString(Long id) {
         return id == null ? null : String.valueOf(id);
+    }
+
+    private String normalizeOptional(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private Long newId() {

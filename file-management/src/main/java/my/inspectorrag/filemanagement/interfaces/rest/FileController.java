@@ -33,8 +33,8 @@ public class FileController {
     public ApiResponse<UploadFileResponse> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam("lawName") @NotBlank String lawName,
-            @RequestParam("lawCode") @NotBlank String lawCode,
-            @RequestParam("versionNo") @NotBlank String versionNo,
+            @RequestParam(value = "lawCode", required = false) String lawCode,
+            @RequestParam(value = "versionNo", required = false) String versionNo,
             @RequestParam(value = "docType", defaultValue = "standard") String docType,
             @RequestParam(value = "status", defaultValue = "active") String status
     ) {
