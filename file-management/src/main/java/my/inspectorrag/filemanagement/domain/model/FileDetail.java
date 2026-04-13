@@ -6,6 +6,7 @@ public record FileDetail(
         Long docId,
         String lawName,
         String lawCode,
+        String docType,
         String versionNo,
         String status,
         String parseStatus,

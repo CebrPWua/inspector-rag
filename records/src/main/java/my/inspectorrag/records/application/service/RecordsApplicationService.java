@@ -25,7 +25,7 @@ public class RecordsApplicationService {
     @Transactional(readOnly = true)
     public List<QaRecordItemDto> listQa(int limit) {
         return recordsRepository.listQa(limit).stream()
-                .map(it -> new QaRecordItemDto(it.qaId(), it.question(), it.answerStatus(), it.elapsedMs(), it.createdAt()))
+                .map(it -> new QaRecordItemDto(toIdString(it.qaId()), it.question(), it.answerStatus(), it.elapsedMs(), it.createdAt()))
                 .toList();
     }
 
@@ -34,15 +34,15 @@ public class RecordsApplicationService {
         var replay = recordsRepository.replay(qaId)
                 .orElseThrow(() -> new IllegalArgumentException("qa replay not found: " + qaId));
         return new QaReplayDto(
-                replay.qaId(),
+                toIdString(replay.qaId()),
                 replay.question(),
                 replay.normalizedQuestion(),
                 replay.answer(),
                 replay.candidates().stream()
-                        .map(c -> new QaReplayCandidateDto(c.chunkId(), c.sourceType(), c.rawScore(), c.finalScore(), c.rankNo()))
+                        .map(c -> new QaReplayCandidateDto(toIdString(c.chunkId()), c.sourceType(), c.rawScore(), c.finalScore(), c.rankNo()))
                         .toList(),
                 replay.evidences().stream()
-                        .map(e -> new QaReplayEvidenceDto(e.citeNo(), e.chunkId(), e.lawName(), e.articleNo(), e.quotedText()))
+                        .map(e -> new QaReplayEvidenceDto(e.citeNo(), toIdString(e.chunkId()), e.lawName(), e.articleNo(), e.quotedText()))
                         .toList()
         );
     }
@@ -76,5 +76,9 @@ public class RecordsApplicationService {
                         .map(it -> new RejectReasonStatDto(it.reasonCode(), it.count()))
                         .toList()
         );
+    }
+
+    private String toIdString(Long id) {
+        return id == null ? null : String.valueOf(id);
     }
 }

@@ -172,7 +172,7 @@ class QaApplicationServiceTest {
         ));
 
         var detail = service.getQa(9L);
-        assertEquals(9L, detail.qaId());
+        assertEquals("9", detail.qaId());
         assertEquals("标准问题", detail.normalizedQuestion());
         assertEquals(1, detail.evidences().size());
         assertEquals("vector", detail.evidences().get(0).sourceType());
@@ -235,7 +235,7 @@ class QaApplicationServiceTest {
         var response = service.ask("springai过滤", filters);
 
         assertEquals(1, response.evidences().size());
-        assertEquals(12L, response.evidences().get(0).chunkId());
+        assertEquals("12", response.evidences().get(0).chunkId());
         verify(qaRepository).filterChunkIdsByMetadata(anyList(), any());
     }
 

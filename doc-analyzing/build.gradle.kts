@@ -20,7 +20,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("com.baomidou:mybatis-plus-spring-boot3-starter:3.5.7")
+    implementation("com.baomidou:mybatis-plus-spring-boot4-starter:3.5.16")
     implementation("org.apache.tika:tika-core:2.9.2")
     implementation("org.apache.tika:tika-parsers-standard-package:2.9.2")
     implementation("software.amazon.awssdk:s3:2.31.57")

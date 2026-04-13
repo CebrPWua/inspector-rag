@@ -92,7 +92,7 @@ export default function QualityReportPage() {
               <Card className={styles.statCard}>
                 <Statistic
                   title="拒答率"
-                  value={(data.rejectRate * 100).toFixed(1)}
+                  value={((data.rejectRate ?? 0) * 100).toFixed(1)}
                   suffix="%"
                   valueStyle={{ color: '#faad14' }}
                 />
@@ -102,7 +102,7 @@ export default function QualityReportPage() {
               <Card className={styles.statCard}>
                 <Statistic
                   title="平均响应"
-                  value={formatElapsed(data.avgElapsedMs)}
+                  value={formatElapsed(data.avgElapsedMs ?? 0)}
                   valueStyle={{ fontSize: 24 }}
                 />
               </Card>
@@ -113,22 +113,22 @@ export default function QualityReportPage() {
           <Row gutter={[16, 16]} className={styles.statRow}>
             <Col xs={24} sm={12} md={6}>
               <Card className={styles.statCard} size="small">
-                <Statistic title="P95 耗时" value={formatElapsed(data.p95ElapsedMs)} valueStyle={{ fontSize: 20 }} />
+                <Statistic title="P95 耗时" value={formatElapsed(data.p95ElapsedMs ?? 0)} valueStyle={{ fontSize: 20 }} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card className={styles.statCard} size="small">
-                <Statistic title="平均证据数" value={data.avgEvidenceCount.toFixed(1)} suffix="条" valueStyle={{ fontSize: 20 }} />
+                <Statistic title="平均证据数" value={(data.avgEvidenceCount ?? 0).toFixed(1)} suffix="条" valueStyle={{ fontSize: 20 }} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card className={styles.statCard} size="small">
-                <Statistic title="Top1 平均融合分" value={data.avgTop1FinalScore.toFixed(3)} valueStyle={{ fontSize: 20 }} />
+                <Statistic title="Top1 平均融合分" value={(data.avgTop1FinalScore ?? 0).toFixed(3)} valueStyle={{ fontSize: 20 }} />
               </Card>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Card className={styles.statCard} size="small">
-                <Statistic title="失败率" value={(data.failedRate * 100).toFixed(1)} suffix="%" valueStyle={{ fontSize: 20, color: '#ff4d4f' }} />
+                <Statistic title="失败率" value={((data.failedRate ?? 0) * 100).toFixed(1)} suffix="%" valueStyle={{ fontSize: 20, color: '#ff4d4f' }} />
               </Card>
             </Col>
           </Row>

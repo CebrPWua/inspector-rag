@@ -1,4 +1,4 @@
-import { Table, Tag, Typography, Button } from 'antd'
+import { Table, Typography, Button } from 'antd'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listQaRecords } from '../../api/records'
@@ -7,7 +7,7 @@ import { formatElapsed, fromNow, formatTime, truncate } from '../../utils/format
 import { StatusTag } from '../../components/StatusTag'
 import styles from './index.module.css'
 
-const { Title, Tooltip, Text } = Typography
+const { Title, Text } = Typography
 
 export default function RecordsPage() {
   const navigate = useNavigate()

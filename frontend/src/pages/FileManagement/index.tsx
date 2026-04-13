@@ -8,8 +8,8 @@ import {
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { uploadFile } from '../../api/files'
-import type { FileDetailResponse } from '../../types/api'
+import { getFileList, uploadFile } from '../../api/files'
+import type { FileListItemResponse } from '../../types/api'
 import { formatTime } from '../../utils/format'
 import styles from './index.module.css'
 
@@ -25,10 +25,15 @@ const PARSE_STATUS_BADGE: Record<string, { status: 'success' | 'processing' | 'e
 
 export default function FileManagementPage() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false)
-  const [fileList, setFileList] = useState<FileDetailResponse[]>([])
   const [form] = Form.useForm()
   const [uploadedFileObj, setUploadedFileObj] = useState<File | null>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+
+  const { data: fileList = [], isLoading: fileListLoading } = useQuery({
+    queryKey: ['files'],
+    queryFn: () => getFileList(200),
+  })
 
   const { mutate: doUpload, isPending: uploading } = useMutation({
     mutationFn: (fd: FormData) => uploadFile(fd),
@@ -38,7 +43,7 @@ export default function FileManagementPage() {
       } else {
         message.success(`上传成功，docId: ${data.docId}`)
       }
-      // 将新文件加入本地列表（实际项目中由列表 API 驱动）
+      queryClient.invalidateQueries({ queryKey: ['files'] })
       navigate(`/files/${data.docId}`)
       setUploadModalOpen(false)
       form.resetFields()
@@ -75,7 +80,7 @@ export default function FileManagementPage() {
     {
       title: '法规名称',
       dataIndex: 'lawName',
-      render: (v: string, row: FileDetailResponse) => (
+      render: (v: string, row: FileListItemResponse) => (
         <a onClick={() => navigate(`/files/${row.docId}`)}>{v}</a>
       ),
     },
@@ -112,7 +117,7 @@ export default function FileManagementPage() {
     {
       title: '操作',
       width: 80,
-      render: (_: unknown, row: FileDetailResponse) => (
+      render: (_: unknown, row: FileListItemResponse) => (
         <Tooltip title="查看详情">
           <Button
             type="link"
@@ -141,6 +146,7 @@ export default function FileManagementPage() {
         <Table
           columns={columns}
           dataSource={fileList}
+          loading={fileListLoading}
           rowKey="docId"
           locale={{ emptyText: '暂无文件，请先上传法规文件' }}
           pagination={{ pageSize: 20, showSizeChanger: false }}

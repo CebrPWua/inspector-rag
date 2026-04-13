@@ -2,10 +2,12 @@ package my.inspectorrag.filemanagement.application.service;
 
 import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
+import my.inspectorrag.filemanagement.domain.model.FileListItem;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
 import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
+import my.inspectorrag.filemanagement.interfaces.dto.FileListItemResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,6 +15,7 @@ import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -50,7 +53,7 @@ public class FileApplicationService {
         String fileHash = fileHashService.sha256(bytes);
         Optional<Long> duplicateDocId = documentRepository.findDocIdByFileHash(fileHash);
         if (duplicateDocId.isPresent()) {
-            return new UploadFileResponse(duplicateDocId.get(), true, null);
+            return new UploadFileResponse(toIdString(duplicateDocId.get()), true, null);
         }
 
         OffsetDateTime now = OffsetDateTime.now();
@@ -84,7 +87,7 @@ public class FileApplicationService {
         );
 
         Long taskId = documentRepository.createImportTask(newId(), docId, "parse", now);
-        return new UploadFileResponse(docId, false, taskId);
+        return new UploadFileResponse(toIdString(docId), false, toIdString(taskId));
     }
 
     @Transactional(readOnly = true)
@@ -92,9 +95,10 @@ public class FileApplicationService {
         FileDetail detail = documentRepository.findFileDetail(docId)
                 .orElseThrow(() -> new IllegalArgumentException("document not found: " + docId));
         return new FileDetailResponse(
-                detail.docId(),
+                toIdString(detail.docId()),
                 detail.lawName(),
                 detail.lawCode(),
+                detail.docType(),
                 detail.versionNo(),
                 detail.status(),
                 detail.parseStatus(),
@@ -103,6 +107,28 @@ public class FileApplicationService {
                 detail.storagePath(),
                 detail.createdAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<FileListItemResponse> listFiles(int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        List<FileListItem> items = documentRepository.listFiles(safeLimit);
+        return items.stream()
+                .map(item -> new FileListItemResponse(
+                        toIdString(item.docId()),
+                        item.lawName(),
+                        item.lawCode(),
+                        item.docType(),
+                        item.versionNo(),
+                        item.status(),
+                        item.parseStatus(),
+                        item.createdAt()
+                ))
+                .toList();
+    }
+
+    private String toIdString(Long id) {
+        return id == null ? null : String.valueOf(id);
     }
 
     private Long newId() {

@@ -8,7 +8,7 @@ spring:
     driver-class-name: org.postgresql.Driver
   ai:
     openai:
-      base-url: ${SPRING_AI_OPENAI_BASE_URL:http://localhost:3000/v1}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:}
       api-key: ${SPRING_AI_OPENAI_API_KEY:}
       embedding:
         options:

@@ -5,6 +5,7 @@ import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
 import my.inspectorrag.filemanagement.application.service.FileApplicationService;
 import my.inspectorrag.filemanagement.interfaces.dto.ApiResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
+import my.inspectorrag.filemanagement.interfaces.dto.FileListItemResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @Validated
 @RestController
@@ -42,5 +45,12 @@ public class FileController {
     @GetMapping("/{docId}")
     public ApiResponse<FileDetailResponse> getDetail(@PathVariable("docId") Long docId) {
         return ApiResponse.ok(fileApplicationService.getFile(docId));
+    }
+
+    @GetMapping
+    public ApiResponse<List<FileListItemResponse>> list(
+            @RequestParam(value = "limit", defaultValue = "200") Integer limit
+    ) {
+        return ApiResponse.ok(fileApplicationService.listFiles(limit));
     }
 }

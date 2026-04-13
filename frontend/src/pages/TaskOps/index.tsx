@@ -69,15 +69,15 @@ export default function TaskOpsPage() {
       title: '死信 ID',
       dataIndex: 'id',
       width: 90,
-      render: (v: string) => <Text code style={{ fontSize: 11 }}>{v.slice(-8)}</Text>,
+      render: (v: unknown) => <Text code style={{ fontSize: 11 }}>{String(v).slice(-8)}</Text>,
     },
     {
       title: '文档',
       dataIndex: 'docId',
       width: 100,
-      render: (v: string) => (
+      render: (v: unknown) => (
         <a onClick={() => navigate(`/files/${v}`)} style={{ fontSize: 12 }}>
-          {v.slice(-8)}
+          {String(v).slice(-8)}
         </a>
       ),
     },

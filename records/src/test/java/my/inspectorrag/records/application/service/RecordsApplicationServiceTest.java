@@ -38,7 +38,7 @@ class RecordsApplicationServiceTest {
 
         var list = service.listQa(20);
         assertEquals(1, list.size());
-        assertEquals(1L, list.get(0).qaId());
+        assertEquals("1", list.get(0).qaId());
     }
 
     @Test
@@ -64,7 +64,7 @@ class RecordsApplicationServiceTest {
         ));
 
         var replay = service.replay(7L);
-        assertEquals(7L, replay.qaId());
+        assertEquals("7", replay.qaId());
         assertEquals(1, replay.candidates().size());
         assertEquals(1, replay.evidences().size());
     }

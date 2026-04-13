@@ -1,8 +1,10 @@
 package my.inspectorrag.filemanagement.domain.repository;
 
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
+import my.inspectorrag.filemanagement.domain.model.FileListItem;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface DocumentRepository {
@@ -35,4 +37,6 @@ public interface DocumentRepository {
     Long createImportTask(Long id, Long docId, String taskType, OffsetDateTime now);
 
     Optional<FileDetail> findFileDetail(Long docId);
+
+    List<FileListItem> listFiles(int limit);
 }

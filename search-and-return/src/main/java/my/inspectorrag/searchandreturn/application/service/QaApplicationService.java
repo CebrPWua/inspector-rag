@@ -197,7 +197,7 @@ public class QaApplicationService {
             qaRepository.insertEvidence(newId(), qaId, merged.candidate(), citeNo, now);
         }
 
-        return new AskResponse(qaId, normalized, answer, toEvidenceDtos(mergedCandidates));
+        return new AskResponse(toIdString(qaId), normalized, answer, toEvidenceDtos(mergedCandidates));
     }
 
     @Transactional(readOnly = true)
@@ -205,7 +205,7 @@ public class QaApplicationService {
         QaDetail detail = qaRepository.findQaDetail(qaId)
                 .orElseThrow(() -> new IllegalArgumentException("qa record not found: " + qaId));
         return new QaDetailResponse(
-                detail.qaId(),
+                toIdString(detail.qaId()),
                 detail.question(),
                 detail.normalizedQuestion(),
                 detail.answer(),
@@ -396,7 +396,7 @@ public class QaApplicationService {
             MergedCandidate merged = mergedCandidates.get(i);
             result.add(new EvidenceDto(
                     i + 1,
-                    merged.candidate().chunkId(),
+                    toIdString(merged.candidate().chunkId()),
                     merged.candidate().lawName(),
                     merged.candidate().articleNo(),
                     merged.candidate().content(),
@@ -413,7 +413,7 @@ public class QaApplicationService {
     private EvidenceDto toEvidenceDto(QaEvidence evidence) {
         return new EvidenceDto(
                 evidence.citeNo() == null ? 0 : evidence.citeNo(),
-                evidence.chunkId(),
+                toIdString(evidence.chunkId()),
                 evidence.lawName(),
                 evidence.articleNo(),
                 evidence.quotedText(),
@@ -423,6 +423,10 @@ public class QaApplicationService {
                 evidence.pageEnd(),
                 evidence.fileVersion()
         );
+    }
+
+    private String toIdString(Long id) {
+        return id == null ? null : String.valueOf(id);
     }
 
     private double computeTitleMatchScore(String normalizedQuestion, RecallCandidate candidate) {

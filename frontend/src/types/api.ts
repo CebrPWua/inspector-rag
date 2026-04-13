@@ -28,6 +28,17 @@ export interface FileDetailResponse {
   createdAt: string
 }
 
+export interface FileListItemResponse {
+  docId: string
+  lawName: string
+  lawCode: string
+  versionNo: string
+  docType: string
+  status: 'active' | 'inactive' | 'pending_confirm'
+  parseStatus: 'pending' | 'processing' | 'success' | 'failed'
+  createdAt: string
+}
+
 // --- search-and-return ---
 export interface EvidenceDto {
   citeNo: number

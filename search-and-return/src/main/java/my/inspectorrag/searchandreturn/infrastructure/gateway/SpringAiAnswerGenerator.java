@@ -3,13 +3,11 @@ package my.inspectorrag.searchandreturn.infrastructure.gateway;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@ConditionalOnProperty(prefix = "inspector.ai", name = "provider", havingValue = "springai")
 public class SpringAiAnswerGenerator implements AnswerGenerator {
 
     private final ChatClient chatClient;

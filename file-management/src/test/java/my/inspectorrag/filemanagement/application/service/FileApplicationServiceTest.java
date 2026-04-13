@@ -2,6 +2,7 @@ package my.inspectorrag.filemanagement.application.service;
 
 import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
+import my.inspectorrag.filemanagement.domain.model.FileListItem;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
 import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
@@ -13,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -40,7 +42,7 @@ class FileApplicationServiceTest {
         UploadFileResponse response = service.upload(new UploadLawFileCommand(file, "法规", "LAW-1", "v1", "standard", "active"));
 
         assertTrue(response.duplicate());
-        assertEquals(1001L, response.docId());
+        assertEquals("1001", response.docId());
         assertNull(response.parseTaskId());
         verify(documentRepository, never()).insertSourceDocument(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
@@ -59,7 +61,7 @@ class FileApplicationServiceTest {
 
         assertFalse(response.duplicate());
         assertNotNull(response.docId());
-        assertEquals(9001L, response.parseTaskId());
+        assertEquals("9001", response.parseTaskId());
         verify(documentRepository, times(1)).insertSourceDocument(anyLong(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString(), any());
         verify(documentRepository, times(1)).insertDocumentFile(anyLong(), anyLong(), anyString(), anyString(), anyLong(), anyString(), anyString(), any());
     }
@@ -69,13 +71,30 @@ class FileApplicationServiceTest {
         FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
         OffsetDateTime now = OffsetDateTime.now();
         when(documentRepository.findFileDetail(77L)).thenReturn(Optional.of(
-                new FileDetail(77L, "法规", "LAW", "v1", "active", "pending", "law.txt", "hash", "/tmp/law.txt", now)
+                new FileDetail(77L, "法规", "LAW", "standard", "v1", "active", "pending", "law.txt", "hash", "/tmp/law.txt", now)
         ));
 
         var dto = service.getFile(77L);
-        assertEquals(77L, dto.docId());
+        assertEquals("77", dto.docId());
         assertEquals("法规", dto.lawName());
         assertEquals("LAW", dto.lawCode());
+        assertEquals("standard", dto.docType());
         assertEquals(now, dto.createdAt());
+    }
+
+    @Test
+    void listFilesShouldMapDomainToDto() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        OffsetDateTime now = OffsetDateTime.now();
+        when(documentRepository.listFiles(200)).thenReturn(List.of(
+                new FileListItem(88L, "法规B", "LAW-B", "regulation", "v2", "active", "success", now)
+        ));
+
+        var list = service.listFiles(200);
+
+        assertEquals(1, list.size());
+        assertEquals("88", list.get(0).docId());
+        assertEquals("regulation", list.get(0).docType());
+        assertEquals("success", list.get(0).parseStatus());
     }
 }

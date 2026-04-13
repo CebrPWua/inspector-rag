@@ -1,4 +1,4 @@
 package my.inspectorrag.filemanagement.interfaces.dto;
 
-public record UploadFileResponse(Long docId, boolean duplicate, Long parseTaskId) {
+public record UploadFileResponse(String docId, boolean duplicate, String parseTaskId) {
 }

@@ -4,7 +4,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 public record QaDetailResponse(
-        Long qaId,
+        String qaId,
         String question,
         String normalizedQuestion,
         String answer,

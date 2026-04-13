@@ -6,20 +6,35 @@ const client = axios.create({
   timeout: 60000,
 })
 
+/**
+ * 清洗错误消息：
+ * - 若内容含 HTML 标签（后端把原始 HTTP 错误页透传过来），显示通用提示
+ * - 若内容过长（>120字），截断
+ */
+function sanitizeMsg(raw: unknown, fallback: string): string {
+  if (!raw || typeof raw !== 'string') return fallback
+  if (/<[a-z][\s\S]*>/i.test(raw)) return fallback   // 含 HTML 标签
+  return raw.length > 120 ? raw.slice(0, 120) + '…' : raw
+}
+
 // 统一响应解包
 client.interceptors.response.use(
   (res) => {
     const data = res.data
     if (data && data.success === false) {
-      const msg = data.message || '请求失败'
+      const msg = sanitizeMsg(data.message, '请求失败')
       message.error(msg)
       return Promise.reject(new Error(msg))
     }
     return data?.data !== undefined ? data.data : data
   },
   (error) => {
-    const msg =
-      error.response?.data?.message || error.message || '网络错误，请稍后重试'
+    const status = error.response?.status
+    const rawMsg = error.response?.data?.message
+    const fallback = status
+      ? `请求失败（${status}），请检查后端服务`
+      : (error.message || '网络错误，请稍后重试')
+    const msg = sanitizeMsg(rawMsg, fallback)
     message.error(msg)
     return Promise.reject(error)
   }

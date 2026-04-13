@@ -18,7 +18,6 @@ export function parseAnswer(answer: string): AnswerSection[] {
 
   // 按已知标题分割
   const sections: AnswerSection[] = []
-  let remaining = answer
 
   // 找到所有段落起始位置
   const splitPoints: { index: number; keyword: string; type: AnswerSection['type'] }[] = []

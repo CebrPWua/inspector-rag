@@ -1,6 +1,7 @@
 package my.inspectorrag.filemanagement.infrastructure.persistence.repository;
 
 import my.inspectorrag.filemanagement.domain.model.FileDetail;
+import my.inspectorrag.filemanagement.domain.model.FileListItem;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentCommandMapper;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentQueryMapper;
@@ -8,6 +9,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Primary
@@ -69,6 +71,7 @@ public class MybatisDocumentRepository implements DocumentRepository {
                         row.docId(),
                         row.lawName(),
                         row.lawCode(),
+                        row.docType(),
                         row.versionNo(),
                         row.status(),
                         row.parseStatus(),
@@ -77,5 +80,21 @@ public class MybatisDocumentRepository implements DocumentRepository {
                         row.storagePath(),
                         row.createdAt()
                 ));
+    }
+
+    @Override
+    public List<FileListItem> listFiles(int limit) {
+        return queryMapper.listFiles(limit).stream()
+                .map(row -> new FileListItem(
+                        row.docId(),
+                        row.lawName(),
+                        row.lawCode(),
+                        row.docType(),
+                        row.versionNo(),
+                        row.status(),
+                        row.parseStatus(),
+                        row.createdAt()
+                ))
+                .toList();
     }
 }

@@ -1,8 +1,8 @@
-package my.inspectorrag.filemanagement.infrastructure.persistence.mapper;
+package my.inspectorrag.filemanagement.domain.model;
 
 import java.time.OffsetDateTime;
 
-public record FileDetailRow(
+public record FileListItem(
         Long docId,
         String lawName,
         String lawCode,
@@ -10,9 +10,6 @@ public record FileDetailRow(
         String versionNo,
         String status,
         String parseStatus,
-        String sourceFileName,
-        String fileHash,
-        String storagePath,
         OffsetDateTime createdAt
 ) {
 }

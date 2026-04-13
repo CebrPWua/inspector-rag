@@ -2,7 +2,7 @@ package my.inspectorrag.filemanagement.infrastructure.persistence.mapper;
 
 import java.time.OffsetDateTime;
 
-public record FileDetailRow(
+public record FileListItemRow(
         Long docId,
         String lawName,
         String lawCode,
@@ -10,9 +10,6 @@ public record FileDetailRow(
         String versionNo,
         String status,
         String parseStatus,
-        String sourceFileName,
-        String fileHash,
-        String storagePath,
         OffsetDateTime createdAt
 ) {
 }

@@ -3,6 +3,8 @@ package my.inspectorrag.searchandreturn.infrastructure.gateway;
 import my.inspectorrag.searchandreturn.domain.model.QaFilters;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.service.RecallService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -13,6 +15,7 @@ import java.util.List;
 @Component
 public class SpringAiVectorStoreRecallService implements RecallService {
 
+    private static final Logger log = LoggerFactory.getLogger(SpringAiVectorStoreRecallService.class);
     private final VectorStore vectorStore;
 
     public SpringAiVectorStoreRecallService(VectorStore vectorStore) {
@@ -21,13 +24,21 @@ public class SpringAiVectorStoreRecallService implements RecallService {
 
     @Override
     public List<RecallCandidate> recall(String normalizedQuestion, int topK, QaFilters filters) {
-        List<Document> docs = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(normalizedQuestion)
-                        .topK(topK)
-                        .similarityThresholdAll()
-                        .build()
-        );
+        List<Document> docs;
+        try {
+            docs = vectorStore.similaritySearch(
+                    SearchRequest.builder()
+                            .query(normalizedQuestion)
+                            .topK(topK)
+                            .similarityThresholdAll()
+                            .build()
+            );
+        } catch (RuntimeException ex) {
+            // Degrade to keyword-only recall when vector recall dependency is unstable.
+            log.warn("vector recall failed, fallback to keyword recall only. question={}, topK={}, error={}",
+                    normalizedQuestion, topK, ex.getMessage());
+            return List.of();
+        }
         return docs.stream()
                 .map(this::toCandidate)
                 .toList();

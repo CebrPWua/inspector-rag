@@ -1,5 +1,5 @@
 import client from './client'
-import type { FileDetailResponse, UploadFileResponse } from '../types/api'
+import type { FileDetailResponse, FileListItemResponse, UploadFileResponse } from '../types/api'
 
 export const uploadFile = (formData: FormData): Promise<UploadFileResponse> =>
   client.post('/files/upload', formData, {
@@ -8,3 +8,6 @@ export const uploadFile = (formData: FormData): Promise<UploadFileResponse> =>
 
 export const getFileDetail = (docId: string): Promise<FileDetailResponse> =>
   client.get(`/files/${docId}`)
+
+export const getFileList = (limit = 200): Promise<FileListItemResponse[]> =>
+  client.get('/files', { params: { limit } })

@@ -52,9 +52,9 @@ public class TaskOpsService {
     public List<DeadLetterTaskDto> deadLetterTasks() {
         return taskRepository.listDeadLetterTasks().stream()
                 .map(it -> new DeadLetterTaskDto(
-                        it.id(),
-                        it.taskId(),
-                        it.docId(),
+                        toIdString(it.id()),
+                        toIdString(it.taskId()),
+                        toIdString(it.docId()),
                         it.taskType(),
                         it.lastError(),
                         it.resolutionStatus(),
@@ -64,6 +64,10 @@ public class TaskOpsService {
                         it.updatedAt()
                 ))
                 .toList();
+    }
+
+    private String toIdString(Long id) {
+        return id == null ? null : String.valueOf(id);
     }
 
     private String normalizeStatus(String status) {

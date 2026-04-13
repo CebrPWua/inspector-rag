@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Skeleton, Alert, Button, Descriptions, Divider, Typography } from 'antd'
+import { Skeleton, Alert, Button, Descriptions, Typography } from 'antd'
 import { ArrowLeftOutlined, HistoryOutlined } from '@ant-design/icons'
 import { getQaDetail } from '../../api/qa'
 import { AnswerContent } from '../../components/AnswerContent'
