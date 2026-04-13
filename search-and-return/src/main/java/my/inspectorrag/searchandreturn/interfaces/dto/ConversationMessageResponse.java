@@ -1,16 +1,18 @@
 package my.inspectorrag.searchandreturn.interfaces.dto;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
-public record AskResponse(
+public record ConversationMessageResponse(
         String qaId,
-        String conversationId,
         int turnNo,
+        String question,
         String normalizedQuestion,
         String rewrittenQuestion,
         List<String> rewriteQueries,
-        String answerStatus,
         String answer,
+        String answerStatus,
+        OffsetDateTime createdAt,
         List<EvidenceDto> evidences
 ) {
 }

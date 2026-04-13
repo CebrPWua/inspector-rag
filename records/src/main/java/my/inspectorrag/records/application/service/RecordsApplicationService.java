@@ -35,8 +35,12 @@ public class RecordsApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException("qa replay not found: " + qaId));
         return new QaReplayDto(
                 toIdString(replay.qaId()),
+                toIdString(replay.conversationId()),
+                replay.turnNo() == null ? 0 : replay.turnNo(),
                 replay.question(),
                 replay.normalizedQuestion(),
+                replay.rewrittenQuestion(),
+                replay.rewriteQueries(),
                 replay.answer(),
                 replay.candidates().stream()
                         .map(c -> new QaReplayCandidateDto(toIdString(c.chunkId()), c.sourceType(), c.rawScore(), c.finalScore(), c.rankNo()))

@@ -3,9 +3,8 @@ package my.inspectorrag.searchandreturn.domain.model;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-public record QaDetail(
+public record ConversationMessage(
         Long qaId,
-        Long conversationId,
         Integer turnNo,
         String question,
         String normalizedQuestion,

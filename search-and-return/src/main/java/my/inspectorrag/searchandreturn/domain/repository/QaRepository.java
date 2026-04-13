@@ -3,6 +3,8 @@ package my.inspectorrag.searchandreturn.domain.repository;
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
 import my.inspectorrag.searchandreturn.domain.model.QaFilters;
+import my.inspectorrag.searchandreturn.domain.model.ConversationContextTurn;
+import my.inspectorrag.searchandreturn.domain.model.ConversationMessage;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 
 import java.time.OffsetDateTime;
@@ -18,9 +20,38 @@ public interface QaRepository {
 
     Set<Long> findChunkIdsByIndustryTags(List<Long> chunkIds, List<String> industryTags);
 
-    void insertQaRecord(Long id, String question, String normalizedQuestion, String answer, int elapsedMs, OffsetDateTime now);
+    boolean existsConversation(Long conversationId);
 
-    void insertRejectedQaRecord(Long id, String question, String normalizedQuestion, String rejectReason, int elapsedMs, OffsetDateTime now);
+    void insertConversation(Long id, OffsetDateTime now);
+
+    int nextTurnNo(Long conversationId);
+
+    List<ConversationContextTurn> findConversationContext(Long conversationId, int limit);
+
+    void insertQaRecord(
+            Long id,
+            Long conversationId,
+            int turnNo,
+            String question,
+            String normalizedQuestion,
+            String rewrittenQuestion,
+            String answer,
+            int elapsedMs,
+            OffsetDateTime now
+    );
+
+    void insertRejectedQaRecord(
+            Long id,
+            Long conversationId,
+            int turnNo,
+            String question,
+            String normalizedQuestion,
+            String rewrittenQuestion,
+            String answer,
+            String rejectReason,
+            int elapsedMs,
+            OffsetDateTime now
+    );
 
     void insertRetrievalSnapshot(
             Long id,
@@ -30,6 +61,8 @@ public interface QaRepository {
             int topN,
             String filtersJson,
             String keywordQuery,
+            String effectiveQuery,
+            String rewriteQueriesJson,
             OffsetDateTime now
     );
 
@@ -50,4 +83,6 @@ public interface QaRepository {
     Optional<QaDetail> findQaDetail(Long qaId);
 
     List<QaEvidence> findQaEvidences(Long qaId);
+
+    List<ConversationMessage> findConversationMessages(Long conversationId);
 }

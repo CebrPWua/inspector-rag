@@ -19,9 +19,17 @@ public interface RecordsQueryMapper {
     List<QaRecordRow> listQa(@Param("limit") int limit);
 
     @Select("""
-            select id as qa_id, question, normalized_question, answer
-              from retrieval.qa_record
-             where id = #{qaId}
+            select q.id as qa_id,
+                   q.conversation_id,
+                   q.turn_no,
+                   q.question,
+                   q.normalized_question,
+                   q.rewritten_question,
+                   coalesce(s.rewrite_queries_json::text, '[]') as rewrite_queries_json,
+                   q.answer
+              from retrieval.qa_record q
+              left join retrieval.qa_retrieval_snapshot s on s.qa_id = q.id
+             where q.id = #{qaId}
             """)
     QaReplayRow findReplayHeader(@Param("qaId") Long qaId);
 

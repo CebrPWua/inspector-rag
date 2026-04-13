@@ -56,6 +56,12 @@ inspector:
         min-top-gap: ${QA_REJECT_MIN_TOP_GAP:0.08}
         min-confident-score: ${QA_REJECT_MIN_CONFIDENT_SCORE:0.70}
         min-evidence-count: ${QA_REJECT_MIN_EVIDENCE_COUNT:2}
+    rewrite:
+      max-attempts: ${QA_REWRITE_MAX_ATTEMPTS:3}
+      max-candidate-queries: ${QA_REWRITE_MAX_CANDIDATE_QUERIES:3}
+      max-query-length: ${QA_REWRITE_MAX_QUERY_LENGTH:120}
+    chat:
+      context-turns: ${QA_CHAT_CONTEXT_TURNS:6}
 
 mybatis-plus:
   configuration:

@@ -1,5 +1,7 @@
 package my.inspectorrag.records.infrastructure.persistence.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import my.inspectorrag.records.domain.model.QaRecordItem;
 import my.inspectorrag.records.domain.model.QaReplay;
 import my.inspectorrag.records.domain.model.QaReplayCandidate;
@@ -14,15 +16,18 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
 
 @Primary
 @Repository
 public class MybatisRecordsRepository implements RecordsRepository {
 
     private final RecordsQueryMapper mapper;
+    private final ObjectMapper objectMapper;
 
     public MybatisRecordsRepository(RecordsQueryMapper mapper) {
         this.mapper = mapper;
+        this.objectMapper = JsonMapper.builder().findAndAddModules().build();
     }
 
     @Override
@@ -64,8 +69,12 @@ public class MybatisRecordsRepository implements RecordsRepository {
                 .toList();
         return Optional.of(new QaReplay(
                 header.qaId(),
+                header.conversationId(),
+                header.turnNo(),
                 header.question(),
                 header.normalizedQuestion(),
+                header.rewrittenQuestion(),
+                parseRewriteQueries(header.rewriteQueriesJson()),
                 header.answer(),
                 candidates,
                 evidences
@@ -92,5 +101,33 @@ public class MybatisRecordsRepository implements RecordsRepository {
                 metrics.avgTop1FinalScore(),
                 reasons
         );
+    }
+
+    private List<String> parseRewriteQueries(String rewriteQueriesJson) {
+        if (rewriteQueriesJson == null || rewriteQueriesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<String> values = objectMapper.readValue(
+                    rewriteQueriesJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+            if (values == null) {
+                return List.of();
+            }
+            List<String> cleaned = new ArrayList<>();
+            for (String value : values) {
+                if (value == null) {
+                    continue;
+                }
+                String trimmed = value.trim();
+                if (!trimmed.isEmpty()) {
+                    cleaned.add(trimmed);
+                }
+            }
+            return List.copyOf(cleaned);
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 }

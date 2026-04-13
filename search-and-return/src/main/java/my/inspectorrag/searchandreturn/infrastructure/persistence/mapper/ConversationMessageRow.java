@@ -2,9 +2,8 @@ package my.inspectorrag.searchandreturn.infrastructure.persistence.mapper;
 
 import java.time.OffsetDateTime;
 
-public record QaDetailRow(
+public record ConversationMessageRow(
         Long qaId,
-        Long conversationId,
         Integer turnNo,
         String question,
         String normalizedQuestion,

@@ -1,23 +1,25 @@
 package my.inspectorrag.searchandreturn.application.service;
 
+import my.inspectorrag.searchandreturn.domain.model.ConversationContextTurn;
+import my.inspectorrag.searchandreturn.domain.model.ConversationMessage;
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
+import my.inspectorrag.searchandreturn.domain.model.RewriteResult;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
+import my.inspectorrag.searchandreturn.domain.service.QuestionRewriteService;
 import my.inspectorrag.searchandreturn.domain.service.RecallService;
 import my.inspectorrag.searchandreturn.interfaces.dto.AskFilters;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,6 +29,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -41,286 +45,192 @@ class QaApplicationServiceTest {
     private RecallService recallService;
     @Mock
     private AnswerGenerator answerGenerator;
+    @Mock
+    private QuestionRewriteService questionRewriteService;
 
-    @Test
-    void askShouldRecallAndPersistQaRecords() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1);
-
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.91, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.87, 1, 1, "v1")
-        ));
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
-
-        var response = service.ask("  高处作业防护  ", null);
-
-        assertNotNull(response.qaId());
-        assertEquals("高处作业防护", response.normalizedQuestion());
-        assertEquals(2, response.evidences().size());
-        verify(qaRepository).insertQaRecord(anyLong(), anyString(), anyString(), anyString(), anyInt(), any());
-        verify(qaRepository, times(2)).insertCandidate(anyLong(), anyLong(), anyLong(), anyString(), any(), any(), any(), anyInt(), any());
-        verify(qaRepository, times(2)).insertEvidence(anyLong(), anyLong(), any(), anyInt(), any());
-        verify(qaRepository, never()).insertRejectedQaRecord(anyLong(), anyString(), anyString(), anyString(), anyInt(), any());
+    @BeforeEach
+    void setUpDefaults() {
+        lenient().when(qaRepository.existsConversation(anyLong())).thenReturn(false);
+        lenient().when(qaRepository.nextTurnNo(anyLong())).thenReturn(2);
+        lenient().when(qaRepository.findConversationContext(anyLong(), anyInt())).thenReturn(List.of());
+        lenient().when(questionRewriteService.rewrite(anyString(), anyString(), anyList()))
+                .thenAnswer(invocation -> {
+                    String normalized = invocation.getArgument(1, String.class);
+                    return new RewriteResult(normalized, List.of(normalized), "default");
+                });
     }
 
     @Test
-    void askShouldThrowWhenNoRecallResults() {
-        QaApplicationService service = buildDefaultService();
+    void askShouldCreateConversationAndPersistSuccess() {
+        QaApplicationService service = buildService(0.10, 0.01, 0.90, 1);
+        when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
+        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.91, 1, 1, "v1")
+        ));
+        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
+        var response = service.ask("  高处作业防护  ", null, null);
+
+        assertNotNull(response.qaId());
+        assertNotNull(response.conversationId());
+        assertEquals(1, response.turnNo());
+        assertEquals("success", response.answerStatus());
+        verify(qaRepository).insertConversation(anyLong(), any());
+        verify(qaRepository).insertQaRecord(anyLong(), anyLong(), eq(1), anyString(), anyString(), anyString(), anyString(), anyInt(), any());
+    }
+
+    @Test
+    void askShouldThrowWhenNoEvidence() {
+        QaApplicationService service = buildDefaultService();
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of());
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null, null));
         assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
-        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
-        assertEquals(true, rejectReasonCaptor.getValue().startsWith("NO_EVIDENCE:"));
+        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyLong(), eq(1), anyString(), anyString(), anyString(), eq(null), anyString(), anyInt(), any());
     }
 
     @Test
-    void askShouldRejectWhenTop1ScoreTooLow() {
+    void askShouldReturnRejectGuidanceWhenLowConfidence() {
         QaApplicationService service = buildDefaultService();
+        when(answerGenerator.generateLowConfidenceGuidance(anyString(), anyString(), anyList())).thenReturn("建议补充作业场景后重试");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.10, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.08, 1, 1, "v1")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.2, 1, 1, "v1"),
+                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.1, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
-        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
-        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
-        assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_TOP1_SCORE:"));
+        var response = service.ask("临边防护栏杆要求", null, null);
+
+        assertEquals("reject", response.answerStatus());
+        assertEquals("建议补充作业场景后重试", response.answer());
+        verify(answerGenerator).generateLowConfidenceGuidance(anyString(), anyString(), anyList());
+        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyLong(), eq(1), anyString(), anyString(), anyString(), eq("建议补充作业场景后重试"), anyString(), anyInt(), any());
     }
 
     @Test
-    void askShouldRejectWhenScoreGapTooSmallAndTop1NotConfident() {
-        QaApplicationService service = buildDefaultService();
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.69, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.68, 1, 1, "v1")
+    void askShouldUseExistingConversationAndContext() {
+        QaApplicationService service = buildService(0.10, 0.01, 0.90, 1);
+        when(qaRepository.existsConversation(100L)).thenReturn(true);
+        when(qaRepository.nextTurnNo(100L)).thenReturn(3);
+        when(qaRepository.findConversationContext(100L, 6)).thenReturn(List.of(
+                new ConversationContextTurn("上一问", "改写上一问", "上一答", "success")
         ));
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.69, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.68, 1, 1, "v1")
-        ));
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null));
-        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
-        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
-        assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_SCORE_GAP:"));
-    }
-
-    @Test
-    void askShouldRejectWhenEvidenceCountIsInsufficient() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.0, 0.0, 1.0, 2);
+        when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(9L, "法规K", "第9条", "关键词命中内容", 0.95, 2, 2, "v2")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.91, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("关键词命中", null));
-        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
-        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
-        assertEquals(true, rejectReasonCaptor.getValue().startsWith("INSUFFICIENT_EVIDENCE_COUNT:"));
+        var response = service.ask("继续提问", "100", null);
+
+        assertEquals("100", response.conversationId());
+        assertEquals(3, response.turnNo());
+        verify(questionRewriteService).rewrite(eq("继续提问"), eq("继续提问"), anyList());
+        verify(answerGenerator).generate(eq("继续提问"), eq("继续提问"), anyList(), anyList());
     }
 
     @Test
-    void askShouldPassWhenVectorOnlyScoreIsHighEnoughUnderVectorOnlyThreshold() {
-        QaApplicationService service = buildDefaultService();
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
+    void askShouldFallbackWhenRewriteFailed() {
+        QaApplicationService service = buildService(0.10, 0.01, 0.90, 1);
+        when(questionRewriteService.rewrite(anyString(), anyString(), anyList()))
+                .thenThrow(new IllegalArgumentException("rewrite failed"));
+        when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(100L, "法规高分", "第10条", "内容高分", 0.82, 1, 1, "v1"),
-                new RecallCandidate(101L, "法规次高分", "第11条", "内容次高分", 0.79, 1, 1, "v1")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.95, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        var response = service.ask("塔吊限位器失效需要立即停机吗", null);
-        assertNotNull(response.qaId());
-        assertEquals(2, response.evidences().size());
-        verify(qaRepository, never()).insertRejectedQaRecord(anyLong(), anyString(), anyString(), anyString(), anyInt(), any());
+        var response = service.ask("  临边防护栏杆要求 ", null, null);
+
+        assertEquals(null, response.rewrittenQuestion());
+        assertEquals(List.of("临边防护栏杆要求"), response.rewriteQueries());
+        verify(questionRewriteService, times(3)).rewrite(anyString(), anyString(), anyList());
     }
 
     @Test
-    void askShouldRejectWhenVectorOnlyScoreIsBelowVectorOnlyThreshold() {
+    void getQaShouldReturnConversationFields() {
         QaApplicationService service = buildDefaultService();
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(110L, "法规低分", "第20条", "内容低分", 0.62, 1, 1, "v1"),
-                new RecallCandidate(111L, "法规次低分", "第21条", "内容次低分", 0.61, 1, 1, "v1")
-        ));
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
-
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("临边防护栏杆要求", null));
-        assertEquals("没有在数据库中找到合适的法律法规", ex.getMessage());
-        ArgumentCaptor<String> rejectReasonCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository).insertRejectedQaRecord(anyLong(), anyString(), anyString(), rejectReasonCaptor.capture(), anyInt(), any());
-        assertEquals(true, rejectReasonCaptor.getValue().startsWith("LOW_TOP1_SCORE:"));
-        assertEquals(true, rejectReasonCaptor.getValue().contains("threshold=0.7200"));
-    }
-
-    @Test
-    void getQaShouldReturnQaDetailWithEvidence() {
-        QaApplicationService service = buildDefaultService();
-
         OffsetDateTime now = OffsetDateTime.now();
         var evidence = new QaEvidence(1, 1L, "法规A", "第1条", "内容A", "vector", 0.9, 1, 1, "v1");
         when(qaRepository.findQaDetail(9L)).thenReturn(Optional.of(
-                new QaDetail(9L, "原问题", "标准问题", "答案", "success", now, List.of(evidence))
+                new QaDetail(9L, 100L, 2, "原问题", "标准问题", "改写问题", List.of("改写问题"), "答案", "success", now, List.of(evidence))
         ));
 
         var detail = service.getQa(9L);
         assertEquals("9", detail.qaId());
-        assertEquals("标准问题", detail.normalizedQuestion());
-        assertEquals(1, detail.evidences().size());
-        assertEquals("vector", detail.evidences().get(0).sourceType());
+        assertEquals("100", detail.conversationId());
+        assertEquals(2, detail.turnNo());
     }
 
     @Test
-    void askShouldMergeVectorAndKeywordAsHybridAndRespectTopN() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 2);
+    void getConversationMessagesShouldMapFromRepository() {
+        QaApplicationService service = buildDefaultService();
+        OffsetDateTime now = OffsetDateTime.now();
+        var evidence = new QaEvidence(1, 1L, "法规A", "第1条", "内容A", "vector", 0.9, 1, 1, "v1");
+        when(qaRepository.findConversationMessages(100L)).thenReturn(List.of(
+                new ConversationMessage(9L, 1, "问题", "标准问题", "改写问题", List.of("改写问题"), "答案", "success", now, List.of(evidence))
+        ));
 
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
+        var messages = service.getConversationMessages(100L);
+        assertEquals(1, messages.size());
+        assertEquals("9", messages.get(0).qaId());
+        assertEquals(1, messages.get(0).turnNo());
+        assertEquals(1, messages.get(0).evidences().size());
+    }
+
+    @Test
+    void askShouldNotCreateConversationWhenExistingConversationIsValid() {
+        QaApplicationService service = buildService(0.10, 0.01, 0.90, 1);
+        when(qaRepository.existsConversation(555L)).thenReturn(true);
+        when(qaRepository.nextTurnNo(555L)).thenReturn(8);
+        when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.90, 1, 1, "v1"),
-                new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.70, 1, 1, "v1")
+                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.95, 1, 1, "v1")
         ));
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of(
-                new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.95, 1, 1, "v1"),
-                new RecallCandidate(3L, "法规C", "第3条", "内容C", 0.80, 1, 1, "v1")
-        ));
-
-        service.ask("高处作业防护", null);
-
-        ArgumentCaptor<String> sourceTypeCaptor = ArgumentCaptor.forClass(String.class);
-        verify(qaRepository, times(2)).insertCandidate(
-                anyLong(), anyLong(), anyLong(), sourceTypeCaptor.capture(), any(), any(), any(), anyInt(), any()
-        );
-        List<String> sourceTypes = sourceTypeCaptor.getAllValues();
-        assertEquals(2, sourceTypes.size());
-        assertEquals(true, sourceTypes.contains("hybrid"));
-    }
-
-    @Test
-    void askShouldUseKeywordRecallWhenVectorIsEmpty() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1);
-
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of());
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of(
-                new RecallCandidate(9L, "法规K", "第9条", "关键词命中内容", 0.88, 2, 2, "v2")
-        ));
-
-        var response = service.ask("关键词命中", null);
-
-        assertEquals(1, response.evidences().size());
-        assertEquals("keyword", response.evidences().get(0).sourceType());
-    }
-
-    @Test
-    void askShouldApplyMetadataFilterForVectorStoreRecall() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 3);
-
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(11L, "法规A", "第1条", "内容A", 0.90, 1, 1, "v1"),
-                new RecallCandidate(12L, "法规B", "第2条", "内容B", 0.80, 1, 1, "v1")
-        ));
-        when(qaRepository.filterChunkIdsByMetadata(anyList(), any())).thenReturn(Set.of(12L));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        AskFilters filters = new AskFilters(List.of("建筑施工"), List.of(), null, null);
-        var response = service.ask("springai过滤", filters);
+        var response = service.ask("继续问", "555", new AskFilters(List.of(), List.of(), null, null));
 
-        assertEquals(1, response.evidences().size());
-        assertEquals("12", response.evidences().get(0).chunkId());
-        verify(qaRepository).filterChunkIdsByMetadata(anyList(), any());
-    }
-
-    @Test
-    void askShouldInvokeIndustryTagMatchWhenIndustryFilterProvided() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1);
-
-        when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
-                new RecallCandidate(21L, "法规A", "第1条", "内容A", 0.92, 1, 1, "v1")
-        ));
-        when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
-        when(qaRepository.filterChunkIdsByMetadata(anyList(), any())).thenReturn(Set.of(21L));
-        when(qaRepository.findChunkIdsByIndustryTags(anyList(), anyList())).thenReturn(Set.of(21L));
-
-        AskFilters filters = new AskFilters(
-                List.of("建筑施工"),
-                List.of("regulation"),
-                "民航局",
-                LocalDate.of(2026, 4, 10)
-        );
-        service.ask("行业标签过滤", filters);
-
-        verify(qaRepository).findChunkIdsByIndustryTags(anyList(), anyList());
+        assertEquals("555", response.conversationId());
+        assertEquals(8, response.turnNo());
+        verify(qaRepository, never()).insertConversation(anyLong(), any());
     }
 
     private QaApplicationService buildDefaultService() {
-        return buildServiceWithRejectThresholds(0.55, 0.08, 0.70, 2);
+        return buildService(0.55, 0.08, 0.70, 2);
     }
 
-    private QaApplicationService buildServiceWithRejectThresholds(
+    private QaApplicationService buildService(
             double minTop1Score,
             double minTopGap,
             double minConfidentScore,
             int minEvidenceCount
     ) {
-        return buildServiceWithRejectThresholds(minTop1Score, 0.72, minTopGap, minConfidentScore, minEvidenceCount, 3, true);
-    }
-
-    private QaApplicationService buildServiceWithRejectThresholds(
-            double minTop1Score,
-            double minTopGap,
-            double minConfidentScore,
-            int minEvidenceCount,
-            int finalTopN
-    ) {
-        return buildServiceWithRejectThresholds(
-                minTop1Score,
-                0.72,
-                minTopGap,
-                minConfidentScore,
-                minEvidenceCount,
-                finalTopN,
-                true
-        );
-    }
-
-    private QaApplicationService buildServiceWithRejectThresholds(
-            double minTop1Score,
-            double minTop1ScoreVectorOnly,
-            double minTopGap,
-            double minConfidentScore,
-            int minEvidenceCount,
-            int finalTopN,
-            boolean scoreNormalizationEnabled
-    ) {
         return new QaApplicationService(
                 qaRepository,
                 recallService,
                 answerGenerator,
+                questionRewriteService,
                 "text-embedding-3-small",
                 2,
                 4,
-                finalTopN,
+                3,
                 "simple",
-                scoreNormalizationEnabled,
+                true,
                 0.55,
                 0.25,
                 0.10,
                 0.10,
                 minTop1Score,
-                minTop1ScoreVectorOnly,
+                0.72,
                 minTopGap,
                 minConfidentScore,
-                minEvidenceCount
+                minEvidenceCount,
+                3,
+                3,
+                120,
+                6
         );
     }
 }

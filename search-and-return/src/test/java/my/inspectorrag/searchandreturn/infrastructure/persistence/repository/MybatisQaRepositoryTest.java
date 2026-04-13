@@ -81,7 +81,18 @@ class MybatisQaRepositoryTest {
     void findQaDetailShouldMapWithEvidence() {
         MybatisQaRepository repository = new MybatisQaRepository(queryMapper, commandMapper);
         OffsetDateTime now = OffsetDateTime.now();
-        when(queryMapper.findQaDetail(9L)).thenReturn(new QaDetailRow(9L, "原问题", "标准问题", "答案", "success", now));
+        when(queryMapper.findQaDetail(9L)).thenReturn(new QaDetailRow(
+                9L,
+                100L,
+                2,
+                "原问题",
+                "标准问题",
+                "改写问题",
+                "[\"改写问题\"]",
+                "答案",
+                "success",
+                now
+        ));
         when(queryMapper.findQaEvidences(9L)).thenReturn(List.of(
                 new QaEvidenceRow(1, 100L, "法规A", "第1条", "引用内容", "hybrid", BigDecimal.valueOf(0.88), 8, 9, "v1")
         ));
@@ -109,15 +120,17 @@ class MybatisQaRepositoryTest {
         OffsetDateTime now = OffsetDateTime.now();
         RecallCandidate candidate = new RecallCandidate(10L, "法规", "第3条", "内容", 0.9, 1, 1, "v1");
 
-        repository.insertQaRecord(1L, "q", "nq", "a", 123, now);
-        repository.insertRejectedQaRecord(2L, "q2", "nq2", "NO_EVIDENCE: x", 66, now);
-        repository.insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", now);
+        repository.insertConversation(99L, now);
+        repository.insertQaRecord(1L, 99L, 1, "q", "nq", "rw", "a", 123, now);
+        repository.insertRejectedQaRecord(2L, 99L, 2, "q2", "nq2", "rw2", "hint", "NO_EVIDENCE: x", 66, now);
+        repository.insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
         repository.insertCandidate(4L, 1L, 10L, "hybrid", 0.8, 0.7, 0.75, 1, now);
         repository.insertEvidence(5L, 1L, candidate, 1, now);
 
-        verify(commandMapper).insertQaRecord(1L, "q", "nq", "a", 123, now);
-        verify(commandMapper).insertRejectedQaRecord(2L, "q2", "nq2", "NO_EVIDENCE: x", 66, now);
-        verify(commandMapper).insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", now);
+        verify(commandMapper).insertConversation(99L, now);
+        verify(commandMapper).insertQaRecord(1L, 99L, 1, "q", "nq", "rw", "a", 123, now);
+        verify(commandMapper).insertRejectedQaRecord(2L, 99L, 2, "q2", "nq2", "rw2", "hint", "NO_EVIDENCE: x", 66, now);
+        verify(commandMapper).insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
         verify(commandMapper).insertCandidate(4L, 1L, 10L, "hybrid", 0.8, 0.7, 0.75, 1, now);
         verify(commandMapper).insertEvidence(5L, 1L, 10L, 1, "内容", "法规", "第3条", 1, 1, "v1", now);
     }

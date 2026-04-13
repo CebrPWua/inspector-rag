@@ -165,9 +165,48 @@ public interface QaQueryMapper {
     );
 
     @Select("""
-            select id as qa_id, question, normalized_question, answer, answer_status, created_at
+            select count(1) > 0
+              from retrieval.qa_conversation
+             where id = #{conversationId}
+            """)
+    boolean existsConversation(@Param("conversationId") Long conversationId);
+
+    @Select("""
+            select coalesce(max(turn_no), 0) + 1
               from retrieval.qa_record
-             where id = #{qaId}
+             where conversation_id = #{conversationId}
+            """)
+    Integer nextTurnNo(@Param("conversationId") Long conversationId);
+
+    @Select("""
+            select question,
+                   rewritten_question,
+                   answer,
+                   answer_status
+              from retrieval.qa_record
+             where conversation_id = #{conversationId}
+             order by turn_no desc
+             limit #{limit}
+            """)
+    List<ConversationContextRow> findConversationContext(
+            @Param("conversationId") Long conversationId,
+            @Param("limit") int limit
+    );
+
+    @Select("""
+            select q.id as qa_id,
+                   q.conversation_id,
+                   q.turn_no,
+                   q.question,
+                   q.normalized_question,
+                   q.rewritten_question,
+                   coalesce(s.rewrite_queries_json::text, '[]') as rewrite_queries_json,
+                   q.answer,
+                   q.answer_status,
+                   q.created_at
+              from retrieval.qa_record q
+              left join retrieval.qa_retrieval_snapshot s on s.qa_id = q.id
+             where q.id = #{qaId}
             """)
     QaDetailRow findQaDetail(@Param("qaId") Long qaId);
 
@@ -188,4 +227,21 @@ public interface QaQueryMapper {
              order by e.cite_no
             """)
     List<QaEvidenceRow> findQaEvidences(@Param("qaId") Long qaId);
+
+    @Select("""
+            select q.id as qa_id,
+                   q.turn_no,
+                   q.question,
+                   q.normalized_question,
+                   q.rewritten_question,
+                   coalesce(s.rewrite_queries_json::text, '[]') as rewrite_queries_json,
+                   q.answer,
+                   q.answer_status,
+                   q.created_at
+              from retrieval.qa_record q
+              left join retrieval.qa_retrieval_snapshot s on s.qa_id = q.id
+             where q.conversation_id = #{conversationId}
+             order by q.turn_no asc, q.created_at asc
+            """)
+    List<ConversationMessageRow> findConversationMessages(@Param("conversationId") Long conversationId);
 }

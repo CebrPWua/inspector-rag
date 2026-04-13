@@ -58,8 +58,12 @@ export default function FileManagementPage() {
       const fd = new FormData()
       fd.append('file', uploadedFileObj)
       fd.append('lawName', values.lawName)
-      fd.append('lawCode', values.lawCode)
-      fd.append('versionNo', values.versionNo)
+      if (values.lawCode?.trim()) {
+        fd.append('lawCode', values.lawCode.trim())
+      }
+      if (values.versionNo?.trim()) {
+        fd.append('versionNo', values.versionNo.trim())
+      }
       fd.append('docType', values.docType ?? 'standard')
       fd.append('status', values.status ?? 'active')
       doUpload(fd)
@@ -74,7 +78,9 @@ export default function FileManagementPage() {
       dataIndex: 'lawCode',
       width: 130,
       render: (v: string) => (
-        <Text code copyable style={{ fontSize: 12 }}>{v}</Text>
+        v
+          ? <Text code copyable style={{ fontSize: 12 }}>{v}</Text>
+          : <Text type="secondary">-</Text>
       ),
     },
     {
@@ -84,7 +90,12 @@ export default function FileManagementPage() {
         <a onClick={() => navigate(`/files/${row.docId}`)}>{v}</a>
       ),
     },
-    { title: '版本', dataIndex: 'versionNo', width: 80 },
+    {
+      title: '版本',
+      dataIndex: 'versionNo',
+      width: 80,
+      render: (v: string) => v || <Text type="secondary">-</Text>,
+    },
     {
       title: '法规状态',
       dataIndex: 'status',
@@ -181,11 +192,11 @@ export default function FileManagementPage() {
             <Input placeholder="如：建筑施工高处作业安全技术规范" maxLength={512} showCount />
           </Form.Item>
           <Space style={{ width: '100%' }} size={12}>
-            <Form.Item name="lawCode" label="法规编码" rules={[{ required: true, message: '请输入法规编码' }]} style={{ flex: 1, marginBottom: 0 }}>
-              <Input placeholder="如：JGJ80-2016" maxLength={128} />
+            <Form.Item name="lawCode" label="法规编码（选填）" style={{ flex: 1, marginBottom: 0 }}>
+              <Input placeholder="如：JGJ80-2016（可不填）" maxLength={128} />
             </Form.Item>
-            <Form.Item name="versionNo" label="版本号" rules={[{ required: true, message: '请输入版本号' }]} style={{ flex: 1, marginBottom: 0 }}>
-              <Input placeholder="如：v1" />
+            <Form.Item name="versionNo" label="版本号（选填）" style={{ flex: 1, marginBottom: 0 }}>
+              <Input placeholder="如：v1（可不填）" />
             </Form.Item>
           </Space>
           <Space style={{ width: '100%', marginTop: 16 }} size={12}>

@@ -55,8 +55,12 @@ class RecordsApplicationServiceTest {
         when(recordsRepository.replay(7L)).thenReturn(Optional.of(
                 new QaReplay(
                         7L,
+                        101L,
+                        2,
                         "原问题",
                         "标准问题",
+                        "改写问题",
+                        List.of("改写问题", "候选2"),
                         "答案",
                         List.of(new QaReplayCandidate(11L, "vector", 0.8, 0.9, 1)),
                         List.of(new QaReplayEvidence(1, 11L, "法规", "第1条", "引用"))
@@ -65,6 +69,10 @@ class RecordsApplicationServiceTest {
 
         var replay = service.replay(7L);
         assertEquals("7", replay.qaId());
+        assertEquals("101", replay.conversationId());
+        assertEquals(2, replay.turnNo());
+        assertEquals("改写问题", replay.rewrittenQuestion());
+        assertEquals(2, replay.rewriteQueries().size());
         assertEquals(1, replay.candidates().size());
         assertEquals(1, replay.evidences().size());
     }

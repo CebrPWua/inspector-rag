@@ -6,14 +6,19 @@ import my.inspectorrag.searchandreturn.application.exception.NoEvidenceFoundExce
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
 import my.inspectorrag.searchandreturn.domain.model.QaFilters;
+import my.inspectorrag.searchandreturn.domain.model.ConversationContextTurn;
+import my.inspectorrag.searchandreturn.domain.model.ConversationMessage;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
+import my.inspectorrag.searchandreturn.domain.model.RewriteResult;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
+import my.inspectorrag.searchandreturn.domain.service.QuestionRewriteService;
 import my.inspectorrag.searchandreturn.domain.service.RecallService;
 import my.inspectorrag.searchandreturn.interfaces.dto.AskFilters;
 import my.inspectorrag.searchandreturn.interfaces.dto.AskResponse;
 import my.inspectorrag.searchandreturn.interfaces.dto.EvidenceDto;
 import my.inspectorrag.searchandreturn.interfaces.dto.QaDetailResponse;
+import my.inspectorrag.searchandreturn.interfaces.dto.ConversationMessageResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,6 +46,7 @@ public class QaApplicationService {
     private final QaRepository qaRepository;
     private final RecallService recallService;
     private final AnswerGenerator answerGenerator;
+    private final QuestionRewriteService questionRewriteService;
     private final ObjectMapper objectMapper;
     private final String embeddingModelName;
     private final int topK;
@@ -57,11 +63,16 @@ public class QaApplicationService {
     private final double minTopGap;
     private final double minConfidentScore;
     private final int minEvidenceCount;
+    private final int rewriteMaxAttempts;
+    private final int rewriteMaxCandidateQueries;
+    private final int rewriteMaxQueryLength;
+    private final int contextTurns;
 
     public QaApplicationService(
             QaRepository qaRepository,
             RecallService recallService,
             AnswerGenerator answerGenerator,
+            QuestionRewriteService questionRewriteService,
             @Value("${inspector.embedding.model-name}") String embeddingModelName,
             @Value("${inspector.embedding.top-k}") int topK,
             @Value("${inspector.retrieval.phase2.keyword-topk:20}") int keywordTopK,
@@ -76,11 +87,16 @@ public class QaApplicationService {
             @Value("${inspector.retrieval.phase3.reject.min-top1-score-vector-only:0.72}") double minTop1ScoreVectorOnly,
             @Value("${inspector.retrieval.phase3.reject.min-top-gap:0.08}") double minTopGap,
             @Value("${inspector.retrieval.phase3.reject.min-confident-score:0.70}") double minConfidentScore,
-            @Value("${inspector.retrieval.phase3.reject.min-evidence-count:2}") int minEvidenceCount
+            @Value("${inspector.retrieval.phase3.reject.min-evidence-count:2}") int minEvidenceCount,
+            @Value("${inspector.retrieval.rewrite.max-attempts:3}") int rewriteMaxAttempts,
+            @Value("${inspector.retrieval.rewrite.max-candidate-queries:3}") int rewriteMaxCandidateQueries,
+            @Value("${inspector.retrieval.rewrite.max-query-length:120}") int rewriteMaxQueryLength,
+            @Value("${inspector.retrieval.chat.context-turns:6}") int contextTurns
     ) {
         this.qaRepository = qaRepository;
         this.recallService = recallService;
         this.answerGenerator = answerGenerator;
+        this.questionRewriteService = questionRewriteService;
         this.objectMapper = JsonMapper.builder().findAndAddModules().build();
         this.embeddingModelName = embeddingModelName;
         this.topK = topK;
@@ -97,28 +113,51 @@ public class QaApplicationService {
         this.minTopGap = minTopGap;
         this.minConfidentScore = minConfidentScore;
         this.minEvidenceCount = minEvidenceCount;
+        this.rewriteMaxAttempts = rewriteMaxAttempts;
+        this.rewriteMaxCandidateQueries = rewriteMaxCandidateQueries;
+        this.rewriteMaxQueryLength = rewriteMaxQueryLength;
+        this.contextTurns = contextTurns;
     }
 
     @Transactional(noRollbackFor = NoEvidenceFoundException.class)
-    public AskResponse ask(String question, AskFilters askFilters) {
+    public AskResponse ask(String question, String conversationIdText, AskFilters askFilters) {
         long start = System.currentTimeMillis();
         String normalized = normalizeQuestion(question);
         QaFilters filters = normalizeFilters(askFilters);
-        List<String> keywords = extractKeywords(normalized);
-
-        List<RecallCandidate> vectorCandidates = recallService.recall(normalized, topK * VECTOR_RECALL_MULTIPLIER, filters);
-        if (!vectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
-            vectorCandidates = applyMetadataFilter(vectorCandidates, filters);
-        }
-        List<RecallCandidate> keywordCandidates = qaRepository.keywordRecall(
-                normalized,
-                keywords,
-                keywordTopK,
-                filters,
-                ftsLanguage
+        ConversationScope conversationScope = resolveConversationScope(conversationIdText);
+        List<ConversationContextTurn> context = qaRepository.findConversationContext(
+                conversationScope.conversationId(),
+                contextTurns
         );
+        RewriteContext rewriteContext = resolveRewriteContext(question, normalized, context);
 
-        List<MergedCandidate> mergedCandidates = mergeAndRank(normalized, filters, vectorCandidates, keywordCandidates);
+        List<RecallCandidate> vectorCandidates = new ArrayList<>();
+        List<RecallCandidate> keywordCandidates = new ArrayList<>();
+        LinkedHashSet<String> allKeywords = new LinkedHashSet<>();
+        for (String query : rewriteContext.candidateQueries()) {
+            List<String> keywords = extractKeywords(query);
+            allKeywords.addAll(keywords);
+            List<RecallCandidate> queryVectorCandidates = recallService.recall(query, topK * VECTOR_RECALL_MULTIPLIER, filters);
+            if (!queryVectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
+                queryVectorCandidates = applyMetadataFilter(queryVectorCandidates, filters);
+            }
+            vectorCandidates.addAll(queryVectorCandidates);
+            keywordCandidates.addAll(qaRepository.keywordRecall(
+                    query,
+                    keywords,
+                    keywordTopK,
+                    filters,
+                    ftsLanguage
+            ));
+        }
+        List<String> mergedKeywords = List.copyOf(allKeywords);
+
+        List<MergedCandidate> mergedCandidates = mergeAndRank(
+                rewriteContext.titleScoreQueryText(),
+                filters,
+                vectorCandidates,
+                keywordCandidates
+        );
         if (mergedCandidates.isEmpty()) {
             String rejectReason = buildRejectReason(
                     "NO_EVIDENCE",
@@ -127,8 +166,12 @@ public class QaApplicationService {
             OffsetDateTime now = OffsetDateTime.now();
             qaRepository.insertRejectedQaRecord(
                     newId(),
+                    conversationScope.conversationId(),
+                    conversationScope.turnNo(),
                     question,
                     normalized,
+                    rewriteContext.rewrittenQuestion(),
+                    null,
                     rejectReason,
                     (int) (System.currentTimeMillis() - start),
                     now
@@ -138,25 +181,72 @@ public class QaApplicationService {
         String lowConfidenceRejectReason = evaluateLowConfidenceRejectReason(mergedCandidates);
         if (lowConfidenceRejectReason != null) {
             OffsetDateTime now = OffsetDateTime.now();
+            Long qaId = newId();
+            String guidanceAnswer = answerGenerator.generateLowConfidenceGuidance(
+                    question,
+                    rewriteContext.effectiveQuery(),
+                    context
+            );
             qaRepository.insertRejectedQaRecord(
-                    newId(),
+                    qaId,
+                    conversationScope.conversationId(),
+                    conversationScope.turnNo(),
                     question,
                     normalized,
+                    rewriteContext.rewrittenQuestion(),
+                    guidanceAnswer,
                     lowConfidenceRejectReason,
                     (int) (System.currentTimeMillis() - start),
                     now
             );
-            throw new NoEvidenceFoundException(REJECT_USER_MESSAGE);
+            qaRepository.insertRetrievalSnapshot(
+                    newId(),
+                    qaId,
+                    embeddingModelName,
+                    topK,
+                    mergedCandidates.size(),
+                    toFiltersJson(filters),
+                    String.join(" ", mergedKeywords),
+                    rewriteContext.effectiveQuery(),
+                    toRewriteQueriesJson(rewriteContext.candidateQueries()),
+                    now
+            );
+            persistCandidatesAndEvidences(qaId, mergedCandidates, now);
+            log.info("qa low-confidence guidance returned: conversationId={}, qaId={}, turnNo={}, rejectReason={}",
+                    conversationScope.conversationId(), qaId, conversationScope.turnNo(), lowConfidenceRejectReason);
+            return new AskResponse(
+                    toIdString(qaId),
+                    toIdString(conversationScope.conversationId()),
+                    conversationScope.turnNo(),
+                    normalized,
+                    rewriteContext.rewrittenQuestion(),
+                    rewriteContext.candidateQueries(),
+                    "reject",
+                    guidanceAnswer,
+                    toEvidenceDtos(mergedCandidates)
+            );
         }
 
         String answer = answerGenerator.generate(
-                normalized,
+                question,
+                rewriteContext.effectiveQuery(),
+                context,
                 mergedCandidates.stream().map(MergedCandidate::candidate).toList()
         );
 
         OffsetDateTime now = OffsetDateTime.now();
         Long qaId = newId();
-        qaRepository.insertQaRecord(qaId, question, normalized, answer, (int) (System.currentTimeMillis() - start), now);
+        qaRepository.insertQaRecord(
+                qaId,
+                conversationScope.conversationId(),
+                conversationScope.turnNo(),
+                question,
+                normalized,
+                rewriteContext.rewrittenQuestion(),
+                answer,
+                (int) (System.currentTimeMillis() - start),
+                now
+        );
         qaRepository.insertRetrievalSnapshot(
                 newId(),
                 qaId,
@@ -164,40 +254,25 @@ public class QaApplicationService {
                 topK,
                 mergedCandidates.size(),
                 toFiltersJson(filters),
-                String.join(" ", keywords),
+                String.join(" ", mergedKeywords),
+                rewriteContext.effectiveQuery(),
+                toRewriteQueriesJson(rewriteContext.candidateQueries()),
                 now
         );
 
-        for (int i = 0; i < mergedCandidates.size(); i++) {
-            int rankNo = i + 1;
-            int citeNo = i + 1;
-            MergedCandidate merged = mergedCandidates.get(i);
-            log.info(
-                    "qa score before candidate persist: qaId={}, rankNo={}, chunkId={}, sourceType={}, rawWeightedScore={}, effectiveWeightSum={}, finalScore={}, normalizationEnabled={}",
-                    qaId,
-                    rankNo,
-                    merged.candidate().chunkId(),
-                    merged.sourceType(),
-                    formatScore(merged.rawWeightedScore()),
-                    formatScore(merged.effectiveWeightSum()),
-                    formatScore(merged.finalScore()),
-                    scoreNormalizationEnabled
-            );
-            qaRepository.insertCandidate(
-                    newId(),
-                    qaId,
-                    merged.candidate().chunkId(),
-                    merged.sourceType(),
-                    merged.rawScore(),
-                    merged.rerankScore(),
-                    merged.finalScore(),
-                    rankNo,
-                    now
-            );
-            qaRepository.insertEvidence(newId(), qaId, merged.candidate(), citeNo, now);
-        }
+        persistCandidatesAndEvidences(qaId, mergedCandidates, now);
 
-        return new AskResponse(toIdString(qaId), normalized, answer, toEvidenceDtos(mergedCandidates));
+        return new AskResponse(
+                toIdString(qaId),
+                toIdString(conversationScope.conversationId()),
+                conversationScope.turnNo(),
+                normalized,
+                rewriteContext.rewrittenQuestion(),
+                rewriteContext.candidateQueries(),
+                "success",
+                answer,
+                toEvidenceDtos(mergedCandidates)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -206,13 +281,36 @@ public class QaApplicationService {
                 .orElseThrow(() -> new IllegalArgumentException("qa record not found: " + qaId));
         return new QaDetailResponse(
                 toIdString(detail.qaId()),
+                toIdString(detail.conversationId()),
+                detail.turnNo() == null ? 0 : detail.turnNo(),
                 detail.question(),
                 detail.normalizedQuestion(),
+                detail.rewrittenQuestion(),
+                detail.rewriteQueries(),
                 detail.answer(),
                 detail.answerStatus(),
                 detail.createdAt(),
                 detail.evidences().stream().map(this::toEvidenceDto).toList()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConversationMessageResponse> getConversationMessages(Long conversationId) {
+        List<ConversationMessage> messages = qaRepository.findConversationMessages(conversationId);
+        return messages.stream()
+                .map(message -> new ConversationMessageResponse(
+                        toIdString(message.qaId()),
+                        message.turnNo() == null ? 0 : message.turnNo(),
+                        message.question(),
+                        message.normalizedQuestion(),
+                        message.rewrittenQuestion(),
+                        message.rewriteQueries(),
+                        message.answer(),
+                        message.answerStatus(),
+                        message.createdAt(),
+                        message.evidences().stream().map(this::toEvidenceDto).toList()
+                ))
+                .toList();
     }
 
     private List<MergedCandidate> mergeAndRank(
@@ -390,6 +488,14 @@ public class QaApplicationService {
         }
     }
 
+    private String toRewriteQueriesJson(List<String> rewriteQueries) {
+        try {
+            return objectMapper.writeValueAsString(rewriteQueries == null ? List.of() : rewriteQueries);
+        } catch (Exception ex) {
+            return "[]";
+        }
+    }
+
     private List<EvidenceDto> toEvidenceDtos(List<MergedCandidate> mergedCandidates) {
         List<EvidenceDto> result = new ArrayList<>(mergedCandidates.size());
         for (int i = 0; i < mergedCandidates.size(); i++) {
@@ -470,6 +576,134 @@ public class QaApplicationService {
         return question == null ? "" : question.trim().replaceAll("\\s+", " ");
     }
 
+    private RewriteContext resolveRewriteContext(
+            String question,
+            String normalizedQuestion,
+            List<ConversationContextTurn> context
+    ) {
+        int attempts = Math.max(1, rewriteMaxAttempts);
+        RuntimeException lastError = null;
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                RewriteResult rewriteResult = questionRewriteService.rewrite(question, normalizedQuestion, context);
+                return sanitizeRewriteResult(rewriteResult, normalizedQuestion);
+            } catch (RuntimeException ex) {
+                lastError = ex;
+                log.warn("question rewrite failed on attempt {}/{}. fallback pending. normalizedQuestion={}, error={}",
+                        attempt, attempts, normalizedQuestion, ex.getMessage());
+            }
+        }
+        if (lastError != null) {
+            log.warn("question rewrite exhausted all attempts. use normalized question as fallback. normalizedQuestion={}, error={}",
+                    normalizedQuestion, lastError.getMessage());
+        }
+        return fallbackRewriteContext(normalizedQuestion);
+    }
+
+    private ConversationScope resolveConversationScope(String conversationIdText) {
+        Long conversationId = parseConversationId(conversationIdText);
+        OffsetDateTime now = OffsetDateTime.now();
+        if (conversationId == null || !qaRepository.existsConversation(conversationId)) {
+            Long newConversationId = newId();
+            qaRepository.insertConversation(newConversationId, now);
+            return new ConversationScope(newConversationId, 1);
+        }
+        return new ConversationScope(conversationId, qaRepository.nextTurnNo(conversationId));
+    }
+
+    private Long parseConversationId(String conversationIdText) {
+        if (conversationIdText == null || conversationIdText.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(conversationIdText.trim());
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private void persistCandidatesAndEvidences(Long qaId, List<MergedCandidate> mergedCandidates, OffsetDateTime now) {
+        for (int i = 0; i < mergedCandidates.size(); i++) {
+            int rankNo = i + 1;
+            int citeNo = i + 1;
+            MergedCandidate merged = mergedCandidates.get(i);
+            log.info(
+                    "qa score before candidate persist: qaId={}, rankNo={}, chunkId={}, sourceType={}, rawWeightedScore={}, effectiveWeightSum={}, finalScore={}, normalizationEnabled={}",
+                    qaId,
+                    rankNo,
+                    merged.candidate().chunkId(),
+                    merged.sourceType(),
+                    formatScore(merged.rawWeightedScore()),
+                    formatScore(merged.effectiveWeightSum()),
+                    formatScore(merged.finalScore()),
+                    scoreNormalizationEnabled
+            );
+            qaRepository.insertCandidate(
+                    newId(),
+                    qaId,
+                    merged.candidate().chunkId(),
+                    merged.sourceType(),
+                    merged.rawScore(),
+                    merged.rerankScore(),
+                    merged.finalScore(),
+                    rankNo,
+                    now
+            );
+            qaRepository.insertEvidence(newId(), qaId, merged.candidate(), citeNo, now);
+        }
+    }
+
+    private RewriteContext sanitizeRewriteResult(RewriteResult rewriteResult, String normalizedQuestion) {
+        if (rewriteResult == null) {
+            return fallbackRewriteContext(normalizedQuestion);
+        }
+        String rewrittenQuestion = sanitizeQueryText(rewriteResult.rewrittenQuestion());
+        LinkedHashSet<String> dedupQueries = new LinkedHashSet<>();
+        if (rewriteResult.candidateQueries() != null) {
+            for (String candidateQuery : rewriteResult.candidateQueries()) {
+                String sanitized = sanitizeQueryText(candidateQuery);
+                if (sanitized != null) {
+                    dedupQueries.add(sanitized);
+                }
+                if (dedupQueries.size() >= rewriteMaxCandidateQueries) {
+                    break;
+                }
+            }
+        }
+        if (dedupQueries.isEmpty() && rewrittenQuestion != null) {
+            dedupQueries.add(rewrittenQuestion);
+        }
+        if (dedupQueries.isEmpty()) {
+            dedupQueries.add(normalizedQuestion);
+            rewrittenQuestion = null;
+        }
+        String effectiveQuery = rewrittenQuestion == null ? dedupQueries.iterator().next() : rewrittenQuestion;
+        String titleScoreQueryText = String.join(" ", dedupQueries);
+        return new RewriteContext(
+                rewrittenQuestion,
+                List.copyOf(dedupQueries),
+                effectiveQuery,
+                titleScoreQueryText
+        );
+    }
+
+    private RewriteContext fallbackRewriteContext(String normalizedQuestion) {
+        String fallbackQuery = normalizeQuestion(normalizedQuestion);
+        return new RewriteContext(null, List.of(fallbackQuery), fallbackQuery, fallbackQuery);
+    }
+
+    private String sanitizeQueryText(String value) {
+        String cleaned = sanitizeString(value);
+        if (cleaned == null) {
+            return null;
+        }
+        String compacted = cleaned.replaceAll("\\s+", " ");
+        if (compacted.length() > rewriteMaxQueryLength) {
+            compacted = compacted.substring(0, rewriteMaxQueryLength);
+        }
+        return compacted;
+    }
+
     private String evaluateLowConfidenceRejectReason(List<MergedCandidate> mergedCandidates) {
         if (mergedCandidates.size() < minEvidenceCount) {
             return buildRejectReason(
@@ -548,6 +782,20 @@ public class QaApplicationService {
             Double finalScore,
             Double rawWeightedScore,
             Double effectiveWeightSum
+    ) {
+    }
+
+    private record RewriteContext(
+            String rewrittenQuestion,
+            List<String> candidateQueries,
+            String effectiveQuery,
+            String titleScoreQueryText
+    ) {
+    }
+
+    private record ConversationScope(
+            Long conversationId,
+            int turnNo
     ) {
     }
 }

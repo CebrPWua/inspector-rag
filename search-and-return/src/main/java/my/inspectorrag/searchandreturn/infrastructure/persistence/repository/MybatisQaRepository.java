@@ -1,8 +1,12 @@
 package my.inspectorrag.searchandreturn.infrastructure.persistence.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import my.inspectorrag.searchandreturn.domain.model.QaDetail;
 import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
 import my.inspectorrag.searchandreturn.domain.model.QaFilters;
+import my.inspectorrag.searchandreturn.domain.model.ConversationContextTurn;
+import my.inspectorrag.searchandreturn.domain.model.ConversationMessage;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import my.inspectorrag.searchandreturn.infrastructure.persistence.mapper.QaCommandMapper;
@@ -12,12 +16,12 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.LinkedHashSet;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Collections;
 
 @Primary
 @Repository
@@ -25,10 +29,12 @@ public class MybatisQaRepository implements QaRepository {
 
     private final QaQueryMapper queryMapper;
     private final QaCommandMapper commandMapper;
+    private final ObjectMapper objectMapper;
 
     public MybatisQaRepository(QaQueryMapper queryMapper, QaCommandMapper commandMapper) {
         this.queryMapper = queryMapper;
         this.commandMapper = commandMapper;
+        this.objectMapper = JsonMapper.builder().findAndAddModules().build();
     }
 
     @Override
@@ -87,13 +93,82 @@ public class MybatisQaRepository implements QaRepository {
     }
 
     @Override
-    public void insertQaRecord(Long id, String question, String normalizedQuestion, String answer, int elapsedMs, OffsetDateTime now) {
-        commandMapper.insertQaRecord(id, question, normalizedQuestion, answer, elapsedMs, now);
+    public boolean existsConversation(Long conversationId) {
+        if (conversationId == null) {
+            return false;
+        }
+        return queryMapper.existsConversation(conversationId);
     }
 
     @Override
-    public void insertRejectedQaRecord(Long id, String question, String normalizedQuestion, String rejectReason, int elapsedMs, OffsetDateTime now) {
-        commandMapper.insertRejectedQaRecord(id, question, normalizedQuestion, rejectReason, elapsedMs, now);
+    public void insertConversation(Long id, OffsetDateTime now) {
+        commandMapper.insertConversation(id, now);
+    }
+
+    @Override
+    public int nextTurnNo(Long conversationId) {
+        Integer value = queryMapper.nextTurnNo(conversationId);
+        return value == null || value < 1 ? 1 : value;
+    }
+
+    @Override
+    public List<ConversationContextTurn> findConversationContext(Long conversationId, int limit) {
+        if (conversationId == null || limit <= 0) {
+            return List.of();
+        }
+        List<ConversationContextTurn> rows = queryMapper.findConversationContext(conversationId, limit).stream()
+                .map(row -> new ConversationContextTurn(
+                        row.question(),
+                        row.rewrittenQuestion(),
+                        row.answer(),
+                        row.answerStatus()
+                ))
+                .toList();
+        List<ConversationContextTurn> ordered = new ArrayList<>(rows);
+        Collections.reverse(ordered);
+        return List.copyOf(ordered);
+    }
+
+    @Override
+    public void insertQaRecord(
+            Long id,
+            Long conversationId,
+            int turnNo,
+            String question,
+            String normalizedQuestion,
+            String rewrittenQuestion,
+            String answer,
+            int elapsedMs,
+            OffsetDateTime now
+    ) {
+        commandMapper.insertQaRecord(id, conversationId, turnNo, question, normalizedQuestion, rewrittenQuestion, answer, elapsedMs, now);
+    }
+
+    @Override
+    public void insertRejectedQaRecord(
+            Long id,
+            Long conversationId,
+            int turnNo,
+            String question,
+            String normalizedQuestion,
+            String rewrittenQuestion,
+            String answer,
+            String rejectReason,
+            int elapsedMs,
+            OffsetDateTime now
+    ) {
+        commandMapper.insertRejectedQaRecord(
+                id,
+                conversationId,
+                turnNo,
+                question,
+                normalizedQuestion,
+                rewrittenQuestion,
+                answer,
+                rejectReason,
+                elapsedMs,
+                now
+        );
     }
 
     @Override
@@ -105,9 +180,22 @@ public class MybatisQaRepository implements QaRepository {
             int topN,
             String filtersJson,
             String keywordQuery,
+            String effectiveQuery,
+            String rewriteQueriesJson,
             OffsetDateTime now
     ) {
-        commandMapper.insertRetrievalSnapshot(id, qaId, modelName, topK, topN, filtersJson, keywordQuery, now);
+        commandMapper.insertRetrievalSnapshot(
+                id,
+                qaId,
+                modelName,
+                topK,
+                topN,
+                filtersJson,
+                keywordQuery,
+                effectiveQuery,
+                rewriteQueriesJson,
+                now
+        );
     }
 
     @Override
@@ -150,8 +238,12 @@ public class MybatisQaRepository implements QaRepository {
         }
         return Optional.of(new QaDetail(
                 row.qaId(),
+                row.conversationId(),
+                row.turnNo(),
                 row.question(),
                 row.normalizedQuestion(),
+                row.rewrittenQuestion(),
+                parseRewriteQueries(row.rewriteQueriesJson()),
                 row.answer(),
                 row.answerStatus(),
                 row.createdAt(),
@@ -175,6 +267,30 @@ public class MybatisQaRepository implements QaRepository {
                         row.fileVersion()
                 ))
                 .toList();
+    }
+
+    @Override
+    public List<ConversationMessage> findConversationMessages(Long conversationId) {
+        if (conversationId == null) {
+            return List.of();
+        }
+        List<ConversationMessage> messages = new ArrayList<>();
+        for (var row : queryMapper.findConversationMessages(conversationId)) {
+            List<QaEvidence> evidences = findQaEvidences(row.qaId());
+            messages.add(new ConversationMessage(
+                    row.qaId(),
+                    row.turnNo(),
+                    row.question(),
+                    row.normalizedQuestion(),
+                    row.rewrittenQuestion(),
+                    parseRewriteQueries(row.rewriteQueriesJson()),
+                    row.answer(),
+                    row.answerStatus(),
+                    row.createdAt(),
+                    evidences
+            ));
+        }
+        return List.copyOf(messages);
     }
 
     private QaFilters normalizeFilters(QaFilters filters) {
@@ -221,5 +337,33 @@ public class MybatisQaRepository implements QaRepository {
             return "";
         }
         return content.length() <= 500 ? content : content.substring(0, 500);
+    }
+
+    private List<String> parseRewriteQueries(String rewriteQueriesJson) {
+        if (rewriteQueriesJson == null || rewriteQueriesJson.isBlank()) {
+            return List.of();
+        }
+        try {
+            List<String> values = objectMapper.readValue(
+                    rewriteQueriesJson,
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)
+            );
+            if (values == null) {
+                return List.of();
+            }
+            List<String> cleaned = new ArrayList<>();
+            for (String value : values) {
+                if (value == null) {
+                    continue;
+                }
+                String trimmed = value.trim();
+                if (!trimmed.isEmpty()) {
+                    cleaned.add(trimmed);
+                }
+            }
+            return Collections.unmodifiableList(cleaned);
+        } catch (Exception ex) {
+            return List.of();
+        }
     }
 }

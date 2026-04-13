@@ -17,8 +17,8 @@ export interface UploadFileResponse {
 export interface FileDetailResponse {
   docId: string
   lawName: string
-  lawCode: string
-  versionNo: string
+  lawCode: string | null
+  versionNo: string | null
   docType: string
   status: 'active' | 'inactive' | 'pending_confirm'
   parseStatus: 'pending' | 'processing' | 'success' | 'failed'
@@ -31,8 +31,8 @@ export interface FileDetailResponse {
 export interface FileListItemResponse {
   docId: string
   lawName: string
-  lawCode: string
-  versionNo: string
+  lawCode: string | null
+  versionNo: string | null
   docType: string
   status: 'active' | 'inactive' | 'pending_confirm'
   parseStatus: 'pending' | 'processing' | 'success' | 'failed'
@@ -55,6 +55,7 @@ export interface EvidenceDto {
 
 export interface AskRequest {
   question: string
+  conversationId?: string
   filters?: {
     industryTags?: string[]
     docTypes?: string[]
@@ -65,16 +66,37 @@ export interface AskRequest {
 
 export interface AskResponse {
   qaId: string
+  conversationId: string
+  turnNo: number
   normalizedQuestion: string
+  rewrittenQuestion?: string | null
+  rewriteQueries?: string[]
+  answerStatus: 'success' | 'reject' | 'failed'
   answer: string
-  answerStatus?: 'success' | 'reject' | 'failed'
   evidences: EvidenceDto[]
 }
 
 export interface QaDetailResponse {
   qaId: string
+  conversationId: string
+  turnNo: number
   question: string
   normalizedQuestion: string
+  rewrittenQuestion?: string | null
+  rewriteQueries?: string[]
+  answer: string
+  answerStatus: 'success' | 'reject' | 'failed'
+  createdAt: string
+  evidences: EvidenceDto[]
+}
+
+export interface ConversationMessageDto {
+  qaId: string
+  turnNo: number
+  question: string
+  normalizedQuestion: string
+  rewrittenQuestion?: string | null
+  rewriteQueries?: string[]
   answer: string
   answerStatus: 'success' | 'reject' | 'failed'
   createdAt: string
@@ -108,8 +130,12 @@ export interface QaReplayEvidenceDto {
 
 export interface QaReplayDto {
   qaId: string
+  conversationId: string
+  turnNo: number
   question: string
   normalizedQuestion: string
+  rewrittenQuestion?: string | null
+  rewriteQueries?: string[]
   answer: string
   candidates: QaReplayCandidateDto[]
   evidences: QaReplayEvidenceDto[]
