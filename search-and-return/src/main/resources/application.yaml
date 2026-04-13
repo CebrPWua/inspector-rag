@@ -20,6 +20,7 @@ spring:
       pgvector:
         initialize-schema: ${SPRING_AI_PGVECTOR_INIT_SCHEMA:false}
         table-name: ${SPRING_AI_PGVECTOR_TABLE:rag_law_chunk_store}
+        schema-name: ${SPRING_AI_PGVECTOR_SCHEMA:indexing}
         id-type: ${SPRING_AI_PGVECTOR_ID_TYPE:TEXT}
         dimensions: ${EMBEDDING_MODEL_DIMENSION:1536}
 
@@ -33,13 +34,10 @@ management:
         include: health,info
 
 inspector:
-  ai:
-    provider: ${AI_PROVIDER:springai}
   embedding:
     model-name: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}
     top-k: ${QA_TOP_K:8}
   retrieval:
-    provider: ${RETRIEVAL_PROVIDER:jdbc}
     phase2:
       keyword-topk: ${QA_KEYWORD_TOP_K:20}
       final-topn: ${QA_FINAL_TOP_N:8}

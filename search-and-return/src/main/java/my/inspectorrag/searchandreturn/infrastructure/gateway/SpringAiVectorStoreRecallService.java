@@ -6,13 +6,11 @@ import my.inspectorrag.searchandreturn.domain.service.RecallService;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 @Component
-@ConditionalOnProperty(prefix = "inspector.retrieval", name = "provider", havingValue = "springai")
 public class SpringAiVectorStoreRecallService implements RecallService {
 
     private final VectorStore vectorStore;
@@ -41,7 +39,7 @@ public class SpringAiVectorStoreRecallService implements RecallService {
                 toLong(md.get("chunkId"), doc.getId()),
                 toString(md.get("lawName"), "未知法规"),
                 toString(md.get("articleNo"), ""),
-                doc.getText() == null ? "" : doc.getText(),
+                toString(md.get("content"), doc.getText() == null ? "" : doc.getText()),
                 doc.getScore(),
                 toInteger(md.get("pageStart")),
                 toInteger(md.get("pageEnd")),

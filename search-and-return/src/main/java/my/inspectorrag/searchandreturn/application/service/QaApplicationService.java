@@ -43,7 +43,6 @@ public class QaApplicationService {
     private final AnswerGenerator answerGenerator;
     private final ObjectMapper objectMapper;
     private final String embeddingModelName;
-    private final String retrievalProvider;
     private final int topK;
     private final int keywordTopK;
     private final int finalTopN;
@@ -65,7 +64,6 @@ public class QaApplicationService {
             AnswerGenerator answerGenerator,
             @Value("${inspector.embedding.model-name}") String embeddingModelName,
             @Value("${inspector.embedding.top-k}") int topK,
-            @Value("${inspector.retrieval.provider:jdbc}") String retrievalProvider,
             @Value("${inspector.retrieval.phase2.keyword-topk:20}") int keywordTopK,
             @Value("${inspector.retrieval.phase2.final-topn:8}") int finalTopN,
             @Value("${inspector.retrieval.phase2.fts-language:simple}") String ftsLanguage,
@@ -85,7 +83,6 @@ public class QaApplicationService {
         this.answerGenerator = answerGenerator;
         this.objectMapper = JsonMapper.builder().findAndAddModules().build();
         this.embeddingModelName = embeddingModelName;
-        this.retrievalProvider = retrievalProvider;
         this.topK = topK;
         this.keywordTopK = keywordTopK;
         this.finalTopN = finalTopN;
@@ -110,7 +107,7 @@ public class QaApplicationService {
         List<String> keywords = extractKeywords(normalized);
 
         List<RecallCandidate> vectorCandidates = recallService.recall(normalized, topK * VECTOR_RECALL_MULTIPLIER, filters);
-        if ("springai".equalsIgnoreCase(retrievalProvider) && !vectorCandidates.isEmpty()) {
+        if (!vectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
             vectorCandidates = applyMetadataFilter(vectorCandidates, filters);
         }
         List<RecallCandidate> keywordCandidates = qaRepository.keywordRecall(
@@ -335,6 +332,13 @@ public class QaApplicationService {
                 sanitizeString(filters.publishOrg()),
                 filters.effectiveOn()
         );
+    }
+
+    private boolean hasMetadataFilters(QaFilters filters) {
+        return !(filters.industryTags().isEmpty()
+                && filters.docTypes().isEmpty()
+                && filters.publishOrg() == null
+                && filters.effectiveOn() == null);
     }
 
     private List<String> sanitizeList(List<String> values) {

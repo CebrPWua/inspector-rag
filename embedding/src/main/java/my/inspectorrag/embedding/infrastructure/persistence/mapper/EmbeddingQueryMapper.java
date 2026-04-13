@@ -10,23 +10,6 @@ import java.util.List;
 public interface EmbeddingQueryMapper {
 
     @Select("""
-            select id
-              from indexing.embedding_model
-             where model_name = #{modelName}
-               and version = #{version}
-             limit 1
-            """)
-    Long findEmbeddingModelId(@Param("modelName") String modelName, @Param("version") String version);
-
-    @Select("""
-            select id
-              from indexing.embedding_model
-             where model_name = #{modelName}
-               and version = #{version}
-            """)
-    Long requireEmbeddingModelId(@Param("modelName") String modelName, @Param("version") String version);
-
-    @Select("""
             select lc.id as chunk_id,
                    sd.law_name,
                    lc.chapter_title,

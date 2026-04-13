@@ -12,8 +12,6 @@ import java.util.Set;
 
 public interface QaRepository {
 
-    List<RecallCandidate> vectorRecall(String vectorLiteral, int topK, QaFilters filters);
-
     List<RecallCandidate> keywordRecall(String normalizedQuestion, List<String> keywords, int topK, QaFilters filters, String ftsLanguage);
 
     Set<Long> filterChunkIdsByMetadata(List<Long> chunkIds, QaFilters filters);

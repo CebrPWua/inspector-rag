@@ -3,7 +3,6 @@ package my.inspectorrag.embedding.application.service;
 import my.inspectorrag.embedding.application.command.EmbedTaskCommand;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
-import my.inspectorrag.embedding.domain.service.EmbeddingService;
 import my.inspectorrag.embedding.domain.service.VectorIndexService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,28 +21,18 @@ class EmbeddingApplicationServiceTest {
     @Mock
     private EmbeddingRepository embeddingRepository;
     @Mock
-    private EmbeddingService embeddingService;
-    @Mock
     private VectorIndexService vectorIndexService;
 
     @Test
     void embedShouldProcessPendingChunks() {
         EmbeddingApplicationService service = new EmbeddingApplicationService(
                 embeddingRepository,
-                embeddingService,
-                vectorIndexService,
-                "text-embedding-3-small",
-                "v1",
-                "mock",
-                8
+                vectorIndexService
         );
 
-        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), anyString(), any()))
-                .thenReturn(11L);
         when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
                 new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
         ));
-        when(embeddingService.toVectorLiteral(anyString(), eq(8))).thenReturn("[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8]");
 
         var response = service.embed(new EmbedTaskCommand(99L, 1L));
 
@@ -59,20 +48,13 @@ class EmbeddingApplicationServiceTest {
     void embedShouldMarkTaskFailedWhenError() {
         EmbeddingApplicationService service = new EmbeddingApplicationService(
                 embeddingRepository,
-                embeddingService,
-                vectorIndexService,
-                "text-embedding-3-small",
-                "v1",
-                "mock",
-                8
+                vectorIndexService
         );
 
-        when(embeddingRepository.ensureActiveEmbeddingModel(anyString(), anyString(), anyInt(), anyString(), any()))
-                .thenReturn(11L);
         when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
                 new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
         ));
-        when(embeddingService.toVectorLiteral(anyString(), eq(8))).thenThrow(new IllegalStateException("mock fail"));
+        doThrow(new IllegalStateException("mock fail")).when(vectorIndexService).upsert(any());
 
         assertThrows(IllegalStateException.class, () -> service.embed(new EmbedTaskCommand(99L, 1L)));
         verify(embeddingRepository).markTaskStatus(eq(99L), eq("failed"), contains("mock fail"));

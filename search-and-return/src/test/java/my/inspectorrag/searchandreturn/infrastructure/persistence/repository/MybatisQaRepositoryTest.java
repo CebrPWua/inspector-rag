@@ -14,7 +14,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -40,34 +39,6 @@ class MybatisQaRepositoryTest {
 
     @Mock
     private QaCommandMapper commandMapper;
-
-    @Test
-    void vectorRecallShouldApplyFilterAndTruncateContent() {
-        MybatisQaRepository repository = new MybatisQaRepository(queryMapper, commandMapper);
-        String longContent = "x".repeat(550);
-        when(queryMapper.vectorRecall(anyString(), anyInt(), anyList(), anyString(), any(), anyList())).thenReturn(List.of(
-                new RecallCandidateRow(1L, "法规A", "第1条", longContent, 0.91, 1, 2, "v1")
-        ));
-
-        QaFilters filters = new QaFilters(
-                List.of("建筑施工"),
-                List.of("standard"),
-                "住建部",
-                LocalDate.of(2026, 4, 12)
-        );
-        List<RecallCandidate> result = repository.vectorRecall("[0.1,0.2]", 5, filters);
-
-        assertEquals(1, result.size());
-        assertEquals(500, result.get(0).content().length());
-        verify(queryMapper).vectorRecall(
-                "[0.1,0.2]",
-                5,
-                List.of("standard"),
-                "住建部",
-                LocalDate.of(2026, 4, 12),
-                List.of("建筑施工")
-        );
-    }
 
     @Test
     void keywordRecallShouldReturnEmptyWhenNoValidTerms() {

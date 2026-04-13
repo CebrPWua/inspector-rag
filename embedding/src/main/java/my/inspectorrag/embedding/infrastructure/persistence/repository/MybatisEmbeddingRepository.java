@@ -7,9 +7,7 @@ import my.inspectorrag.embedding.infrastructure.persistence.mapper.EmbeddingQuer
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
-import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Primary
 @Repository
@@ -26,19 +24,6 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
     @Override
     public void markTaskStatus(Long taskId, String status, String errorMsg) {
         commandMapper.markTaskStatus(taskId, status, errorMsg);
-    }
-
-    @Override
-    public Long ensureActiveEmbeddingModel(String modelName, String version, int dimension, String provider, OffsetDateTime now) {
-        Long existing = queryMapper.findEmbeddingModelId(modelName, version);
-        if (existing != null) {
-            commandMapper.activateEmbeddingModel(existing);
-            return existing;
-        }
-
-        Long id = newId();
-        commandMapper.insertOrActivateEmbeddingModel(id, modelName, version, dimension, provider, now);
-        return queryMapper.requireEmbeddingModelId(modelName, version);
     }
 
     @Override
@@ -62,16 +47,5 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
     @Override
     public void markChunkStatus(Long chunkId, String status) {
         commandMapper.markChunkStatus(chunkId, status);
-    }
-
-    @Override
-    public void upsertChunkEmbedding(Long id, Long chunkId, Long modelId, String embeddingVersion, String vectorLiteral, OffsetDateTime now) {
-        commandMapper.upsertChunkEmbedding(id, chunkId, modelId, embeddingVersion, vectorLiteral, now);
-    }
-
-    private Long newId() {
-        long ts = System.currentTimeMillis();
-        int rand = ThreadLocalRandom.current().nextInt(1_000_000);
-        return ts * 1_000_000L + rand;
     }
 }

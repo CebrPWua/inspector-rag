@@ -32,30 +32,6 @@ public class MybatisQaRepository implements QaRepository {
     }
 
     @Override
-    public List<RecallCandidate> vectorRecall(String vectorLiteral, int topK, QaFilters filters) {
-        QaFilters normalized = normalizeFilters(filters);
-        return queryMapper.vectorRecall(
-                        vectorLiteral,
-                        topK,
-                        normalized.docTypes(),
-                        normalized.publishOrg(),
-                        normalized.effectiveOn(),
-                        normalized.industryTags()
-                ).stream()
-                .map(row -> new RecallCandidate(
-                        row.chunkId(),
-                        row.lawName(),
-                        row.articleNo(),
-                        truncate(row.content()),
-                        row.score(),
-                        row.pageStart(),
-                        row.pageEnd(),
-                        row.versionNo()
-                ))
-                .toList();
-    }
-
-    @Override
     public List<RecallCandidate> keywordRecall(String normalizedQuestion, List<String> keywords, int topK, QaFilters filters, String ftsLanguage) {
         List<String> queryTerms = toQueryTerms(normalizedQuestion, keywords);
         if (queryTerms.isEmpty()) {

@@ -16,59 +16,6 @@ public interface QaQueryMapper {
                    sd.law_name,
                    lc.article_no,
                    lc.content,
-                   (1 - (lce.embedding <=> #{vectorLiteral}::vector)) as score,
-                   lc.page_start,
-                   lc.page_end,
-                   sd.version_no
-              from indexing.law_chunk_embedding lce
-              join ingest.law_chunk lc on lc.id = lce.chunk_id
-              join ingest.source_document sd on sd.id = lc.doc_id
-             where sd.status = 'active'
-               and lc.status = 'active'
-             <if test="docTypes != null and docTypes.size > 0">
-               and sd.doc_type in
-               <foreach collection="docTypes" item="docType" open="(" separator="," close=")">
-                 #{docType}
-               </foreach>
-             </if>
-             <if test="publishOrg != null and publishOrg != ''">
-               and sd.publish_org = #{publishOrg}
-             </if>
-             <if test="effectiveOn != null">
-               and (sd.effective_date is null or sd.effective_date &lt;= #{effectiveOn})
-               and (sd.expired_date is null or sd.expired_date &gt;= #{effectiveOn})
-             </if>
-             <if test="industryTags != null and industryTags.size > 0">
-               and exists (
-                   select 1
-                     from ingest.chunk_tag ct
-                    where ct.chunk_id = lc.id
-                      and ct.tag_type = 'industry'
-                      and ct.tag_value in
-                      <foreach collection="industryTags" item="industryTag" open="(" separator="," close=")">
-                        #{industryTag}
-                      </foreach>
-               )
-             </if>
-             order by lce.embedding <=> #{vectorLiteral}::vector asc
-             limit #{topK}
-            </script>
-            """)
-    List<RecallCandidateRow> vectorRecall(
-            @Param("vectorLiteral") String vectorLiteral,
-            @Param("topK") int topK,
-            @Param("docTypes") List<String> docTypes,
-            @Param("publishOrg") String publishOrg,
-            @Param("effectiveOn") LocalDate effectiveOn,
-            @Param("industryTags") List<String> industryTags
-    );
-
-    @Select("""
-            <script>
-            select lc.id as chunk_id,
-                   sd.law_name,
-                   lc.article_no,
-                   lc.content,
                    greatest(
                        ts_rank_cd(to_tsvector(cast(#{ftsLanguage} as regconfig), coalesce(lc.content, '')),
                                   websearch_to_tsquery(cast(#{ftsLanguage} as regconfig), #{keywordQuery})),

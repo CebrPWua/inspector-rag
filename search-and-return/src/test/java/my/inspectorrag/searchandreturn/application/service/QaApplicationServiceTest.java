@@ -180,7 +180,7 @@ class QaApplicationServiceTest {
 
     @Test
     void askShouldMergeVectorAndKeywordAsHybridAndRespectTopN() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 2, "jdbc");
+        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 2);
 
         when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
@@ -220,8 +220,8 @@ class QaApplicationServiceTest {
     }
 
     @Test
-    void askShouldApplyMetadataFilterForSpringAiRecall() {
-        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 3, "springai");
+    void askShouldApplyMetadataFilterForVectorStoreRecall() {
+        QaApplicationService service = buildServiceWithRejectThresholds(0.10, 0.01, 0.90, 1, 3);
 
         when(answerGenerator.generate(anyString(), anyList())).thenReturn("mock answer");
         when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
@@ -231,7 +231,8 @@ class QaApplicationServiceTest {
         when(qaRepository.filterChunkIdsByMetadata(anyList(), any())).thenReturn(Set.of(12L));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
-        var response = service.ask("springai过滤", null);
+        AskFilters filters = new AskFilters(List.of("建筑施工"), List.of(), null, null);
+        var response = service.ask("springai过滤", filters);
 
         assertEquals(1, response.evidences().size());
         assertEquals(12L, response.evidences().get(0).chunkId());
@@ -247,6 +248,7 @@ class QaApplicationServiceTest {
                 new RecallCandidate(21L, "法规A", "第1条", "内容A", 0.92, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
+        when(qaRepository.filterChunkIdsByMetadata(anyList(), any())).thenReturn(Set.of(21L));
         when(qaRepository.findChunkIdsByIndustryTags(anyList(), anyList())).thenReturn(Set.of(21L));
 
         AskFilters filters = new AskFilters(
@@ -270,7 +272,7 @@ class QaApplicationServiceTest {
             double minConfidentScore,
             int minEvidenceCount
     ) {
-        return buildServiceWithRejectThresholds(minTop1Score, 0.72, minTopGap, minConfidentScore, minEvidenceCount, 3, "jdbc", true);
+        return buildServiceWithRejectThresholds(minTop1Score, 0.72, minTopGap, minConfidentScore, minEvidenceCount, 3, true);
     }
 
     private QaApplicationService buildServiceWithRejectThresholds(
@@ -278,8 +280,7 @@ class QaApplicationServiceTest {
             double minTopGap,
             double minConfidentScore,
             int minEvidenceCount,
-            int finalTopN,
-            String retrievalProvider
+            int finalTopN
     ) {
         return buildServiceWithRejectThresholds(
                 minTop1Score,
@@ -288,7 +289,6 @@ class QaApplicationServiceTest {
                 minConfidentScore,
                 minEvidenceCount,
                 finalTopN,
-                retrievalProvider,
                 true
         );
     }
@@ -300,7 +300,6 @@ class QaApplicationServiceTest {
             double minConfidentScore,
             int minEvidenceCount,
             int finalTopN,
-            String retrievalProvider,
             boolean scoreNormalizationEnabled
     ) {
         return new QaApplicationService(
@@ -309,7 +308,6 @@ class QaApplicationServiceTest {
                 answerGenerator,
                 "text-embedding-3-small",
                 2,
-                retrievalProvider,
                 4,
                 finalTopN,
                 "simple",

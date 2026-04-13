@@ -17,6 +17,7 @@ spring:
       pgvector:
         initialize-schema: ${SPRING_AI_PGVECTOR_INIT_SCHEMA:false}
         table-name: ${SPRING_AI_PGVECTOR_TABLE:rag_law_chunk_store}
+        schema-name: ${SPRING_AI_PGVECTOR_SCHEMA:indexing}
         id-type: ${SPRING_AI_PGVECTOR_ID_TYPE:TEXT}
         dimensions: ${EMBEDDING_MODEL_DIMENSION:1536}
 
@@ -28,14 +29,6 @@ management:
     web:
       exposure:
         include: health,info
-
-inspector:
-  embedding:
-    provider: ${EMBEDDING_PROVIDER:springai}
-    model-name: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}
-    model-version: ${EMBEDDING_MODEL_VERSION:v1}
-    dimension: ${EMBEDDING_MODEL_DIMENSION:1536}
-    vector-store-sync-enabled: ${VECTOR_STORE_SYNC_ENABLED:false}
 
 mybatis-plus:
   configuration:

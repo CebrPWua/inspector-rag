@@ -4,7 +4,6 @@ import my.inspectorrag.embedding.domain.model.PendingChunk;
 import my.inspectorrag.embedding.domain.service.VectorIndexService;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
@@ -12,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 
 @Component
-@ConditionalOnProperty(prefix = "inspector.embedding", name = "vector-store-sync-enabled", havingValue = "true")
 public class SpringAiPgVectorIndexService implements VectorIndexService {
 
     private final VectorStore vectorStore;
@@ -31,6 +29,7 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
         metadata.put("sectionTitle", nullSafe(chunk.sectionTitle()));
         metadata.put("versionNo", nullSafe(chunk.versionNo()));
         metadata.put("status", nullSafe(chunk.status()));
+        metadata.put("content", nullSafe(chunk.content()));
         if (chunk.pageStart() != null) {
             metadata.put("pageStart", chunk.pageStart());
         }
@@ -40,10 +39,17 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
 
         Document doc = Document.builder()
                 .id(String.valueOf(chunk.chunkId()))
-                .text(chunk.content() == null ? "" : chunk.content())
+                .text(buildEmbeddingInput(chunk))
                 .metadata(metadata)
                 .build();
         vectorStore.add(List.of(doc));
+    }
+
+    private String buildEmbeddingInput(PendingChunk chunk) {
+        return "法规名称：" + nullSafe(chunk.lawName())
+                + "\n章节：" + nullSafe(chunk.chapterTitle()) + " / " + nullSafe(chunk.sectionTitle())
+                + "\n条款：" + nullSafe(chunk.articleNo())
+                + "\n正文：" + nullSafe(chunk.content());
     }
 
     private String nullSafe(String text) {
