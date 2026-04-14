@@ -244,4 +244,17 @@ public interface QaQueryMapper {
              order by q.turn_no asc, q.created_at asc
             """)
     List<ConversationMessageRow> findConversationMessages(@Param("conversationId") Long conversationId);
+
+    @Select("""
+            select min_top1_score,
+                   min_top1_score_vector_only,
+                   min_top_gap,
+                   min_confident_score,
+                   min_evidence_count,
+                   updated_by,
+                   updated_at
+              from retrieval.qa_reject_threshold_config
+             where id = 1
+            """)
+    RejectThresholdConfigRow findCurrentRejectThresholdConfig();
 }

@@ -49,10 +49,10 @@ inspector:
         tag: ${QA_WEIGHT_TAG:0.10}
     phase3:
       reject:
-        min-top1-score: ${QA_REJECT_MIN_TOP1_SCORE:0.55}
-        min-top1-score-vector-only: ${QA_REJECT_MIN_TOP1_SCORE_VECTOR_ONLY:0.72}
-        min-top-gap: ${QA_REJECT_MIN_TOP_GAP:0.08}
-        min-confident-score: ${QA_REJECT_MIN_CONFIDENT_SCORE:0.70}
+        min-top1-score: ${QA_REJECT_MIN_TOP1_SCORE:0.50}
+        min-top1-score-vector-only: ${QA_REJECT_MIN_TOP1_SCORE_VECTOR_ONLY:0.58}
+        min-top-gap: ${QA_REJECT_MIN_TOP_GAP:0.005}
+        min-confident-score: ${QA_REJECT_MIN_CONFIDENT_SCORE:0.60}
         min-evidence-count: ${QA_REJECT_MIN_EVIDENCE_COUNT:2}
     rewrite:
       max-attempts: ${QA_REWRITE_MAX_ATTEMPTS:3}

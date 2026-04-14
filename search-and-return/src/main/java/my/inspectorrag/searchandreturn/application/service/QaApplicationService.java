@@ -8,7 +8,9 @@ import my.inspectorrag.searchandreturn.domain.model.QaEvidence;
 import my.inspectorrag.searchandreturn.domain.model.QaFilters;
 import my.inspectorrag.searchandreturn.domain.model.ConversationContextTurn;
 import my.inspectorrag.searchandreturn.domain.model.ConversationMessage;
+import my.inspectorrag.searchandreturn.domain.model.RejectThresholdConfig;
 import my.inspectorrag.searchandreturn.domain.model.RecallCandidate;
+import my.inspectorrag.searchandreturn.domain.model.RewriteMode;
 import my.inspectorrag.searchandreturn.domain.model.RewriteResult;
 import my.inspectorrag.searchandreturn.domain.repository.QaRepository;
 import my.inspectorrag.searchandreturn.domain.service.AnswerGenerator;
@@ -33,6 +35,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -41,12 +44,15 @@ public class QaApplicationService {
 
     private static final int VECTOR_RECALL_MULTIPLIER = 3;
     private static final String REJECT_USER_MESSAGE = "没有在数据库中找到合适的法律法规";
+    private static final String LOW_TOP1_SCORE_CODE = "LOW_TOP1_SCORE";
+    private static final String LOW_SCORE_GAP_CODE = "LOW_SCORE_GAP";
     private static final Logger log = LoggerFactory.getLogger(QaApplicationService.class);
 
     private final QaRepository qaRepository;
     private final RecallService recallService;
     private final AnswerGenerator answerGenerator;
     private final QuestionRewriteService questionRewriteService;
+    private final RejectThresholdConfigApplicationService rejectThresholdConfigApplicationService;
     private final ObjectMapper objectMapper;
     private final String embeddingModelName;
     private final int topK;
@@ -58,11 +64,6 @@ public class QaApplicationService {
     private final double keywordWeight;
     private final double titleWeight;
     private final double tagWeight;
-    private final double minTop1Score;
-    private final double minTop1ScoreVectorOnly;
-    private final double minTopGap;
-    private final double minConfidentScore;
-    private final int minEvidenceCount;
     private final int rewriteMaxAttempts;
     private final int rewriteMaxCandidateQueries;
     private final int rewriteMaxQueryLength;
@@ -73,6 +74,7 @@ public class QaApplicationService {
             RecallService recallService,
             AnswerGenerator answerGenerator,
             QuestionRewriteService questionRewriteService,
+            RejectThresholdConfigApplicationService rejectThresholdConfigApplicationService,
             @Value("${inspector.embedding.model-name}") String embeddingModelName,
             @Value("${inspector.embedding.top-k}") int topK,
             @Value("${inspector.retrieval.phase2.keyword-topk:20}") int keywordTopK,
@@ -83,11 +85,6 @@ public class QaApplicationService {
             @Value("${inspector.retrieval.phase2.weights.keyword:0.25}") double keywordWeight,
             @Value("${inspector.retrieval.phase2.weights.title:0.10}") double titleWeight,
             @Value("${inspector.retrieval.phase2.weights.tag:0.10}") double tagWeight,
-            @Value("${inspector.retrieval.phase3.reject.min-top1-score:0.55}") double minTop1Score,
-            @Value("${inspector.retrieval.phase3.reject.min-top1-score-vector-only:0.72}") double minTop1ScoreVectorOnly,
-            @Value("${inspector.retrieval.phase3.reject.min-top-gap:0.08}") double minTopGap,
-            @Value("${inspector.retrieval.phase3.reject.min-confident-score:0.70}") double minConfidentScore,
-            @Value("${inspector.retrieval.phase3.reject.min-evidence-count:2}") int minEvidenceCount,
             @Value("${inspector.retrieval.rewrite.max-attempts:3}") int rewriteMaxAttempts,
             @Value("${inspector.retrieval.rewrite.max-candidate-queries:3}") int rewriteMaxCandidateQueries,
             @Value("${inspector.retrieval.rewrite.max-query-length:120}") int rewriteMaxQueryLength,
@@ -97,6 +94,7 @@ public class QaApplicationService {
         this.recallService = recallService;
         this.answerGenerator = answerGenerator;
         this.questionRewriteService = questionRewriteService;
+        this.rejectThresholdConfigApplicationService = rejectThresholdConfigApplicationService;
         this.objectMapper = JsonMapper.builder().findAndAddModules().build();
         this.embeddingModelName = embeddingModelName;
         this.topK = topK;
@@ -108,11 +106,6 @@ public class QaApplicationService {
         this.keywordWeight = keywordWeight;
         this.titleWeight = titleWeight;
         this.tagWeight = tagWeight;
-        this.minTop1Score = minTop1Score;
-        this.minTop1ScoreVectorOnly = minTop1ScoreVectorOnly;
-        this.minTopGap = minTopGap;
-        this.minConfidentScore = minConfidentScore;
-        this.minEvidenceCount = minEvidenceCount;
         this.rewriteMaxAttempts = rewriteMaxAttempts;
         this.rewriteMaxCandidateQueries = rewriteMaxCandidateQueries;
         this.rewriteMaxQueryLength = rewriteMaxQueryLength;
@@ -129,42 +122,43 @@ public class QaApplicationService {
                 conversationScope.conversationId(),
                 contextTurns
         );
-        RewriteContext rewriteContext = resolveRewriteContext(question, normalized, context);
         String routeKey = String.valueOf(conversationScope.conversationId());
         String embeddingProfileKey = recallService.resolveProfileKey(routeKey);
+        RewriteContext autoRewriteContext = resolveRewriteContext(question, normalized, context, RewriteMode.AUTO);
+        RetrievalRound autoRound = executeRetrievalRound(autoRewriteContext, filters, routeKey);
+        RejectThresholdConfig rejectThresholdConfig = rejectThresholdConfigApplicationService.resolveForAsk();
+        String autoRejectReason = evaluateRoundRejectReason(autoRound.mergedCandidates(), rejectThresholdConfig);
 
-        List<RecallCandidate> vectorCandidates = new ArrayList<>();
-        List<RecallCandidate> keywordCandidates = new ArrayList<>();
-        LinkedHashSet<String> allKeywords = new LinkedHashSet<>();
-        for (String query : rewriteContext.candidateQueries()) {
-            List<String> keywords = extractKeywords(query);
-            allKeywords.addAll(keywords);
-            List<RecallCandidate> queryVectorCandidates = recallService.recall(
-                    query,
-                    topK * VECTOR_RECALL_MULTIPLIER,
-                    filters,
-                    routeKey
+        RetrievalRound selectedRound = autoRound;
+        String selectedRejectReason = autoRejectReason;
+        boolean forceFallbackTriggered = false;
+
+        if (shouldForceFallback(autoRound.rewriteContext(), autoRejectReason)) {
+            forceFallbackTriggered = true;
+            RewriteContext forceRewriteContext = resolveRewriteContext(question, normalized, context, RewriteMode.FORCE);
+            RetrievalRound forceRound = executeRetrievalRound(forceRewriteContext, filters, routeKey);
+            String forceRejectReason = evaluateRoundRejectReason(forceRound.mergedCandidates(), rejectThresholdConfig);
+            RoundSelection selected = choosePreferredRound(
+                    autoRound,
+                    autoRejectReason,
+                    forceRound,
+                    forceRejectReason
             );
-            if (!queryVectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
-                queryVectorCandidates = applyMetadataFilter(queryVectorCandidates, filters);
-            }
-            vectorCandidates.addAll(queryVectorCandidates);
-            keywordCandidates.addAll(qaRepository.keywordRecall(
-                    query,
-                    keywords,
-                    keywordTopK,
-                    filters,
-                    ftsLanguage
-            ));
+            selectedRound = selected.round();
+            selectedRejectReason = selected.rejectReason();
+            logRoundComparison(conversationScope.conversationId(), autoRound, autoRejectReason, forceRound, forceRejectReason, selected);
+        } else {
+            log.info("qa rewrite decision: conversationId={}, rewriteMode={}, rewriteNeeded={}, effectiveQuery={}",
+                    conversationScope.conversationId(),
+                    autoRewriteContext.mode(),
+                    autoRewriteContext.rewriteNeeded(),
+                    autoRewriteContext.effectiveQuery());
         }
-        List<String> mergedKeywords = List.copyOf(allKeywords);
 
-        List<MergedCandidate> mergedCandidates = mergeAndRank(
-                rewriteContext.titleScoreQueryText(),
-                filters,
-                vectorCandidates,
-                keywordCandidates
-        );
+        List<MergedCandidate> mergedCandidates = selectedRound.mergedCandidates();
+        RewriteContext rewriteContext = selectedRound.rewriteContext();
+        List<String> mergedKeywords = selectedRound.mergedKeywords();
+
         if (mergedCandidates.isEmpty()) {
             String rejectReason = buildRejectReason(
                     "NO_EVIDENCE",
@@ -185,8 +179,7 @@ public class QaApplicationService {
             );
             throw new NoEvidenceFoundException(REJECT_USER_MESSAGE);
         }
-        String lowConfidenceRejectReason = evaluateLowConfidenceRejectReason(mergedCandidates);
-        if (lowConfidenceRejectReason != null) {
+        if (selectedRejectReason != null) {
             OffsetDateTime now = OffsetDateTime.now();
             Long qaId = newId();
             String guidanceAnswer = answerGenerator.generateLowConfidenceGuidance(
@@ -202,12 +195,12 @@ public class QaApplicationService {
                     normalized,
                     rewriteContext.rewrittenQuestion(),
                     guidanceAnswer,
-                    lowConfidenceRejectReason,
+                    selectedRejectReason,
                     (int) (System.currentTimeMillis() - start),
                     now
             );
             qaRepository.insertRetrievalSnapshot(
-                    newId(),
+                newId(),
                     qaId,
                     embeddingModelName,
                     embeddingProfileKey,
@@ -220,8 +213,14 @@ public class QaApplicationService {
                     now
             );
             persistCandidatesAndEvidences(qaId, mergedCandidates, now);
-            log.info("qa low-confidence guidance returned: conversationId={}, qaId={}, turnNo={}, rejectReason={}",
-                    conversationScope.conversationId(), qaId, conversationScope.turnNo(), lowConfidenceRejectReason);
+            log.info("qa low-confidence guidance returned: conversationId={}, qaId={}, turnNo={}, rejectReason={}, rewriteMode={}, rewriteNeeded={}, forceFallbackTriggered={}",
+                    conversationScope.conversationId(),
+                    qaId,
+                    conversationScope.turnNo(),
+                    selectedRejectReason,
+                    rewriteContext.mode(),
+                    rewriteContext.rewriteNeeded(),
+                    forceFallbackTriggered);
             return new AskResponse(
                     toIdString(qaId),
                     toIdString(conversationScope.conversationId()),
@@ -588,25 +587,166 @@ public class QaApplicationService {
     private RewriteContext resolveRewriteContext(
             String question,
             String normalizedQuestion,
-            List<ConversationContextTurn> context
+            List<ConversationContextTurn> context,
+            RewriteMode mode
     ) {
         int attempts = Math.max(1, rewriteMaxAttempts);
         RuntimeException lastError = null;
         for (int attempt = 1; attempt <= attempts; attempt++) {
             try {
-                RewriteResult rewriteResult = questionRewriteService.rewrite(question, normalizedQuestion, context);
-                return sanitizeRewriteResult(rewriteResult, normalizedQuestion);
+                RewriteResult rewriteResult = questionRewriteService.rewrite(question, normalizedQuestion, context, mode);
+                return sanitizeRewriteResult(rewriteResult, normalizedQuestion, mode);
             } catch (RuntimeException ex) {
                 lastError = ex;
-                log.warn("question rewrite failed on attempt {}/{}. fallback pending. normalizedQuestion={}, error={}",
-                        attempt, attempts, normalizedQuestion, ex.getMessage());
+                log.warn("question rewrite failed on attempt {}/{}. fallback pending. mode={}, normalizedQuestion={}, error={}",
+                        attempt, attempts, mode, normalizedQuestion, ex.getMessage());
             }
         }
         if (lastError != null) {
-            log.warn("question rewrite exhausted all attempts. use normalized question as fallback. normalizedQuestion={}, error={}",
-                    normalizedQuestion, lastError.getMessage());
+            log.warn("question rewrite exhausted all attempts. use normalized question as fallback. mode={}, normalizedQuestion={}, error={}",
+                    mode, normalizedQuestion, lastError.getMessage());
         }
-        return fallbackRewriteContext(normalizedQuestion);
+        return fallbackRewriteContext(normalizedQuestion, mode);
+    }
+
+    private RetrievalRound executeRetrievalRound(RewriteContext rewriteContext, QaFilters filters, String routeKey) {
+        List<RecallCandidate> vectorCandidates = new ArrayList<>();
+        List<RecallCandidate> keywordCandidates = new ArrayList<>();
+        LinkedHashSet<String> allKeywords = new LinkedHashSet<>();
+        for (String query : rewriteContext.candidateQueries()) {
+            List<String> keywords = extractKeywords(query);
+            allKeywords.addAll(keywords);
+            List<RecallCandidate> queryVectorCandidates = recallService.recall(
+                    query,
+                    topK * VECTOR_RECALL_MULTIPLIER,
+                    filters,
+                    routeKey
+            );
+            if (!queryVectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
+                queryVectorCandidates = applyMetadataFilter(queryVectorCandidates, filters);
+            }
+            vectorCandidates.addAll(queryVectorCandidates);
+            keywordCandidates.addAll(qaRepository.keywordRecall(
+                    query,
+                    keywords,
+                    keywordTopK,
+                    filters,
+                    ftsLanguage
+            ));
+        }
+        List<MergedCandidate> mergedCandidates = mergeAndRank(
+                rewriteContext.titleScoreQueryText(),
+                filters,
+                vectorCandidates,
+                keywordCandidates
+        );
+        return new RetrievalRound(
+                rewriteContext,
+                List.copyOf(allKeywords),
+                mergedCandidates
+        );
+    }
+
+    private String evaluateRoundRejectReason(List<MergedCandidate> mergedCandidates, RejectThresholdConfig rejectThresholdConfig) {
+        if (mergedCandidates.isEmpty()) {
+            return buildRejectReason("NO_EVIDENCE", "no evidence found for current question");
+        }
+        return evaluateLowConfidenceRejectReason(mergedCandidates, rejectThresholdConfig);
+    }
+
+    private boolean shouldForceFallback(RewriteContext rewriteContext, String rejectReason) {
+        if (rewriteContext.rewriteNeeded()) {
+            return false;
+        }
+        if (rejectReason == null) {
+            return false;
+        }
+        String code = extractRejectCode(rejectReason);
+        return LOW_TOP1_SCORE_CODE.equals(code) || LOW_SCORE_GAP_CODE.equals(code);
+    }
+
+    private RoundSelection choosePreferredRound(
+            RetrievalRound firstRound,
+            String firstRejectReason,
+            RetrievalRound secondRound,
+            String secondRejectReason
+    ) {
+        boolean firstPass = firstRejectReason == null;
+        boolean secondPass = secondRejectReason == null;
+        if (firstPass && !secondPass) {
+            return new RoundSelection(firstRound, firstRejectReason);
+        }
+        if (!firstPass && secondPass) {
+            return new RoundSelection(secondRound, secondRejectReason);
+        }
+        double firstTop1 = top1Score(firstRound.mergedCandidates());
+        double secondTop1 = top1Score(secondRound.mergedCandidates());
+        if (secondTop1 > firstTop1) {
+            return new RoundSelection(secondRound, secondRejectReason);
+        }
+        return new RoundSelection(firstRound, firstRejectReason);
+    }
+
+    private void logRoundComparison(
+            Long conversationId,
+            RetrievalRound firstRound,
+            String firstRejectReason,
+            RetrievalRound secondRound,
+            String secondRejectReason,
+            RoundSelection selected
+    ) {
+        log.info("qa rewrite fallback compare: conversationId={}, firstMode={}, firstRewriteNeeded={}, firstEffectiveQuery={}, firstTop1={}, firstTop2={}, firstGap={}, firstReject={}, secondMode={}, secondRewriteNeeded={}, secondEffectiveQuery={}, secondTop1={}, secondTop2={}, secondGap={}, secondReject={}, selectedMode={}, selectedEffectiveQuery={}",
+                conversationId,
+                firstRound.rewriteContext().mode(),
+                firstRound.rewriteContext().rewriteNeeded(),
+                firstRound.rewriteContext().effectiveQuery(),
+                formatScore(top1Score(firstRound.mergedCandidates())),
+                formatScore(top2Score(firstRound.mergedCandidates())),
+                formatScore(topGap(firstRound.mergedCandidates())),
+                firstRejectReason,
+                secondRound.rewriteContext().mode(),
+                secondRound.rewriteContext().rewriteNeeded(),
+                secondRound.rewriteContext().effectiveQuery(),
+                formatScore(top1Score(secondRound.mergedCandidates())),
+                formatScore(top2Score(secondRound.mergedCandidates())),
+                formatScore(topGap(secondRound.mergedCandidates())),
+                secondRejectReason,
+                selected.round().rewriteContext().mode(),
+                selected.round().rewriteContext().effectiveQuery());
+    }
+
+    private double top1Score(List<MergedCandidate> mergedCandidates) {
+        if (mergedCandidates == null || mergedCandidates.isEmpty()) {
+            return -1d;
+        }
+        return valueOrZero(mergedCandidates.getFirst().finalScore());
+    }
+
+    private double top2Score(List<MergedCandidate> mergedCandidates) {
+        if (mergedCandidates == null || mergedCandidates.size() < 2) {
+            return -1d;
+        }
+        return valueOrZero(mergedCandidates.get(1).finalScore());
+    }
+
+    private double topGap(List<MergedCandidate> mergedCandidates) {
+        double top1 = top1Score(mergedCandidates);
+        double top2 = top2Score(mergedCandidates);
+        if (top1 < 0d || top2 < 0d) {
+            return -1d;
+        }
+        return top1 - top2;
+    }
+
+    private String extractRejectCode(String rejectReason) {
+        if (rejectReason == null) {
+            return "";
+        }
+        int idx = rejectReason.indexOf(':');
+        if (idx <= 0) {
+            return rejectReason.trim();
+        }
+        return rejectReason.substring(0, idx).trim();
     }
 
     private ConversationScope resolveConversationScope(String conversationIdText) {
@@ -662,25 +802,38 @@ public class QaApplicationService {
         }
     }
 
-    private RewriteContext sanitizeRewriteResult(RewriteResult rewriteResult, String normalizedQuestion) {
+    private RewriteContext sanitizeRewriteResult(RewriteResult rewriteResult, String normalizedQuestion, RewriteMode mode) {
+        String normalizedAnchor = sanitizeQueryText(normalizedQuestion);
         if (rewriteResult == null) {
-            return fallbackRewriteContext(normalizedQuestion);
+            return fallbackRewriteContext(normalizedAnchor, mode);
+        }
+        boolean rewriteNeeded = rewriteResult.rewriteNeeded();
+        String rewriteReason = sanitizeString(rewriteResult.rewriteReason());
+        List<String> preserveTerms = sanitizeList(rewriteResult.preserveTerms());
+        if (!rewriteNeeded) {
+            String anchor = Objects.requireNonNullElse(normalizedAnchor, normalizeQuestion(normalizedQuestion));
+            return new RewriteContext(
+                    null,
+                    List.of(anchor),
+                    anchor,
+                    anchor,
+                    false,
+                    rewriteReason,
+                    preserveTerms,
+                    mode
+            );
         }
         String rewrittenQuestion = sanitizeQueryText(rewriteResult.rewrittenQuestion());
         LinkedHashSet<String> dedupQueries = new LinkedHashSet<>();
+        addQueryWithinLimit(dedupQueries, normalizedAnchor);
+        addQueryWithinLimit(dedupQueries, rewrittenQuestion);
         if (rewriteResult.candidateQueries() != null) {
             for (String candidateQuery : rewriteResult.candidateQueries()) {
                 String sanitized = sanitizeQueryText(candidateQuery);
-                if (sanitized != null) {
-                    dedupQueries.add(sanitized);
-                }
-                if (dedupQueries.size() >= rewriteMaxCandidateQueries) {
+                if (!addQueryWithinLimit(dedupQueries, sanitized)) {
                     break;
                 }
             }
-        }
-        if (dedupQueries.isEmpty() && rewrittenQuestion != null) {
-            dedupQueries.add(rewrittenQuestion);
         }
         if (dedupQueries.isEmpty()) {
             dedupQueries.add(normalizedQuestion);
@@ -692,13 +845,37 @@ public class QaApplicationService {
                 rewrittenQuestion,
                 List.copyOf(dedupQueries),
                 effectiveQuery,
-                titleScoreQueryText
+                titleScoreQueryText,
+                true,
+                rewriteReason,
+                preserveTerms,
+                mode
         );
     }
 
-    private RewriteContext fallbackRewriteContext(String normalizedQuestion) {
+    private RewriteContext fallbackRewriteContext(String normalizedQuestion, RewriteMode mode) {
         String fallbackQuery = normalizeQuestion(normalizedQuestion);
-        return new RewriteContext(null, List.of(fallbackQuery), fallbackQuery, fallbackQuery);
+        return new RewriteContext(
+                null,
+                List.of(fallbackQuery),
+                fallbackQuery,
+                fallbackQuery,
+                false,
+                "rewrite-fallback",
+                List.of(),
+                mode
+        );
+    }
+
+    private boolean addQueryWithinLimit(LinkedHashSet<String> dedupQueries, String query) {
+        if (query == null || dedupQueries.contains(query)) {
+            return true;
+        }
+        if (dedupQueries.size() >= rewriteMaxCandidateQueries) {
+            return false;
+        }
+        dedupQueries.add(query);
+        return true;
     }
 
     private String sanitizeQueryText(String value) {
@@ -713,15 +890,18 @@ public class QaApplicationService {
         return compacted;
     }
 
-    private String evaluateLowConfidenceRejectReason(List<MergedCandidate> mergedCandidates) {
-        if (mergedCandidates.size() < minEvidenceCount) {
+    private String evaluateLowConfidenceRejectReason(
+            List<MergedCandidate> mergedCandidates,
+            RejectThresholdConfig rejectThresholdConfig
+    ) {
+        if (mergedCandidates.size() < rejectThresholdConfig.minEvidenceCount()) {
             return buildRejectReason(
                     "INSUFFICIENT_EVIDENCE_COUNT",
-                    "required min evidence count=" + minEvidenceCount + ", actual=" + mergedCandidates.size()
+                    "required min evidence count=" + rejectThresholdConfig.minEvidenceCount() + ", actual=" + mergedCandidates.size()
             );
         }
         double top1 = mergedCandidates.get(0).finalScore();
-        double threshold = minTop1ThresholdBySourceType(mergedCandidates.get(0).sourceType());
+        double threshold = minTop1ThresholdBySourceType(mergedCandidates.get(0).sourceType(), rejectThresholdConfig);
         if (top1 < threshold) {
             return buildRejectReason(
                     "LOW_TOP1_SCORE",
@@ -731,24 +911,24 @@ public class QaApplicationService {
         if (mergedCandidates.size() >= 2) {
             double top2 = mergedCandidates.get(1).finalScore();
             double gap = top1 - top2;
-            if (gap < minTopGap && top1 < minConfidentScore) {
+            if (gap < rejectThresholdConfig.minTopGap() && top1 < rejectThresholdConfig.minConfidentScore()) {
                 return buildRejectReason(
                         "LOW_SCORE_GAP",
                         "top1-top2 gap=" + formatScore(gap)
-                                + " below threshold=" + formatScore(minTopGap)
+                                + " below threshold=" + formatScore(rejectThresholdConfig.minTopGap())
                                 + " and top1=" + formatScore(top1)
-                                + " below confident threshold=" + formatScore(minConfidentScore)
+                                + " below confident threshold=" + formatScore(rejectThresholdConfig.minConfidentScore())
                 );
             }
         }
         return null;
     }
 
-    private double minTop1ThresholdBySourceType(String sourceType) {
+    private double minTop1ThresholdBySourceType(String sourceType, RejectThresholdConfig rejectThresholdConfig) {
         if ("vector".equalsIgnoreCase(sourceType)) {
-            return minTop1ScoreVectorOnly;
+            return rejectThresholdConfig.minTop1ScoreVectorOnly();
         }
-        return minTop1Score;
+        return rejectThresholdConfig.minTop1Score();
     }
 
     private String buildRejectReason(String code, String detail) {
@@ -798,7 +978,24 @@ public class QaApplicationService {
             String rewrittenQuestion,
             List<String> candidateQueries,
             String effectiveQuery,
-            String titleScoreQueryText
+            String titleScoreQueryText,
+            boolean rewriteNeeded,
+            String rewriteReason,
+            List<String> preserveTerms,
+            RewriteMode mode
+    ) {
+    }
+
+    private record RetrievalRound(
+            RewriteContext rewriteContext,
+            List<String> mergedKeywords,
+            List<MergedCandidate> mergedCandidates
+    ) {
+    }
+
+    private record RoundSelection(
+            RetrievalRound round,
+            String rejectReason
     ) {
     }
 

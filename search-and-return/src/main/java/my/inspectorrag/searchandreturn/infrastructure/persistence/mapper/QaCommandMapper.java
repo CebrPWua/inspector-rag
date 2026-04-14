@@ -108,4 +108,27 @@ public interface QaCommandMapper {
             @Param("fileVersion") String fileVersion,
             @Param("now") OffsetDateTime now
     );
+
+    @Insert("""
+            insert into retrieval.qa_reject_threshold_config
+            (id, min_top1_score, min_top1_score_vector_only, min_top_gap, min_confident_score, min_evidence_count, updated_by, created_at, updated_at)
+            values (1, #{minTop1Score}, #{minTop1ScoreVectorOnly}, #{minTopGap}, #{minConfidentScore}, #{minEvidenceCount}, #{updatedBy}, #{now}, #{now})
+            on conflict (id) do update
+            set min_top1_score = excluded.min_top1_score,
+                min_top1_score_vector_only = excluded.min_top1_score_vector_only,
+                min_top_gap = excluded.min_top_gap,
+                min_confident_score = excluded.min_confident_score,
+                min_evidence_count = excluded.min_evidence_count,
+                updated_by = excluded.updated_by,
+                updated_at = excluded.updated_at
+            """)
+    void upsertRejectThresholdConfig(
+            @Param("minTop1Score") double minTop1Score,
+            @Param("minTop1ScoreVectorOnly") double minTop1ScoreVectorOnly,
+            @Param("minTopGap") double minTopGap,
+            @Param("minConfidentScore") double minConfidentScore,
+            @Param("minEvidenceCount") int minEvidenceCount,
+            @Param("updatedBy") String updatedBy,
+            @Param("now") OffsetDateTime now
+    );
 }

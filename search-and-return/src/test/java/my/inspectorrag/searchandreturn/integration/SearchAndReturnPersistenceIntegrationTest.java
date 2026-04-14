@@ -1,6 +1,7 @@
 package my.inspectorrag.searchandreturn.integration;
 
 import my.inspectorrag.searchandreturn.infrastructure.persistence.repository.MybatisQaRepository;
+import my.inspectorrag.searchandreturn.infrastructure.persistence.repository.MybatisRejectThresholdConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mybatis.spring.annotation.MapperScan;
@@ -50,6 +51,8 @@ class SearchAndReturnPersistenceIntegrationTest {
 
     @Autowired
     private MybatisQaRepository repository;
+    @Autowired
+    private MybatisRejectThresholdConfigRepository rejectThresholdConfigRepository;
 
     @BeforeEach
     void setUpSchema() {
@@ -124,11 +127,25 @@ class SearchAndReturnPersistenceIntegrationTest {
                     updated_at timestamptz not null
                 )
                 """);
+        jdbcTemplate.execute("""
+                create table if not exists retrieval.qa_reject_threshold_config (
+                    id int primary key,
+                    min_top1_score numeric(6,4) not null,
+                    min_top1_score_vector_only numeric(6,4) not null,
+                    min_top_gap numeric(6,4) not null,
+                    min_confident_score numeric(6,4) not null,
+                    min_evidence_count int not null,
+                    updated_by varchar(128),
+                    created_at timestamptz not null,
+                    updated_at timestamptz not null
+                )
+                """);
         jdbcTemplate.execute("truncate table retrieval.qa_evidence");
         jdbcTemplate.execute("truncate table retrieval.qa_candidate");
         jdbcTemplate.execute("truncate table retrieval.qa_retrieval_snapshot");
         jdbcTemplate.execute("truncate table retrieval.qa_record");
         jdbcTemplate.execute("truncate table retrieval.qa_conversation");
+        jdbcTemplate.execute("truncate table retrieval.qa_reject_threshold_config");
     }
 
     @Test
@@ -183,10 +200,36 @@ class SearchAndReturnPersistenceIntegrationTest {
         assertTrue(persistedQueries.contains("候选查询2"));
     }
 
+    @Test
+    void shouldUpsertAndLoadRejectThresholdConfigFromRealDb() {
+        assertTrue(rejectThresholdConfigRepository.findCurrent().isEmpty());
+        OffsetDateTime now = OffsetDateTime.now();
+
+        rejectThresholdConfigRepository.upsert(0.61, 0.66, 0.05, 0.69, 1, "tester", now);
+        var saved = rejectThresholdConfigRepository.findCurrent();
+        assertTrue(saved.isPresent());
+        assertEquals(0.61, saved.get().minTop1Score());
+        assertEquals(0.66, saved.get().minTop1ScoreVectorOnly());
+        assertEquals(0.05, saved.get().minTopGap());
+        assertEquals(0.69, saved.get().minConfidentScore());
+        assertEquals(1, saved.get().minEvidenceCount());
+        assertEquals("tester", saved.get().updatedBy());
+
+        rejectThresholdConfigRepository.upsert(0.58, 0.63, 0.03, 0.65, 2, "owner", now.plusMinutes(1));
+        var updated = rejectThresholdConfigRepository.findCurrent();
+        assertTrue(updated.isPresent());
+        assertEquals(0.58, updated.get().minTop1Score());
+        assertEquals(0.63, updated.get().minTop1ScoreVectorOnly());
+        assertEquals(0.03, updated.get().minTopGap());
+        assertEquals(0.65, updated.get().minConfidentScore());
+        assertEquals(2, updated.get().minEvidenceCount());
+        assertEquals("owner", updated.get().updatedBy());
+    }
+
     @SpringBootConfiguration
     @EnableAutoConfiguration
     @MapperScan("my.inspectorrag.searchandreturn.infrastructure.persistence.mapper")
-    @Import(MybatisQaRepository.class)
+    @Import({MybatisQaRepository.class, MybatisRejectThresholdConfigRepository.class})
     static class TestApp {
     }
 }
