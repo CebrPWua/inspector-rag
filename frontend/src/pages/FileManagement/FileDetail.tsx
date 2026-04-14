@@ -1,8 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { Descriptions, Badge, Alert, Button, Skeleton, Tooltip, Typography, Tag } from 'antd'
-import { ArrowLeftOutlined } from '@ant-design/icons'
-import { getFileDetail } from '../../api/files'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Descriptions, Badge, Alert, Button, Skeleton, Tooltip, Typography, Tag, Popconfirm, Space, message } from 'antd'
+import { ArrowLeftOutlined, DeleteOutlined } from '@ant-design/icons'
+import { deleteFile, getFileDetail } from '../../api/files'
 import { formatTime } from '../../utils/format'
 import styles from './FileDetail.module.css'
 
@@ -18,6 +18,7 @@ const PARSE_BADGE: Record<string, { status: 'success' | 'processing' | 'error' |
 export default function FileDetailPage() {
   const { docId } = useParams<{ docId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['file', docId],
@@ -30,11 +31,22 @@ export default function FileDetailPage() {
     },
   })
 
+  const { mutate: doDelete, isPending: deleting } = useMutation({
+    mutationFn: (id: string) => deleteFile(id),
+    onSuccess: () => {
+      message.success('删除成功')
+      queryClient.invalidateQueries({ queryKey: ['files'] })
+      queryClient.invalidateQueries({ queryKey: ['file', docId] })
+      navigate('/files')
+    },
+  })
+
   if (isLoading) return <Skeleton active style={{ padding: 32 }} />
 
   if (!data) return <Alert type="error" message="文件不存在" showIcon style={{ margin: 32 }} />
 
   const parseBadge = PARSE_BADGE[data.parseStatus] ?? { status: 'default' as const, text: data.parseStatus }
+  const canDelete = data.parseStatus !== 'pending' && data.parseStatus !== 'processing'
 
   return (
     <div className={styles.page}>
@@ -49,11 +61,28 @@ export default function FileDetailPage() {
           column={2}
           size="middle"
           extra={
-            data.parseStatus === 'failed' && (
-              <Button type="link" danger onClick={() => navigate('/tasks/dead-letter')}>
-                前往任务运维处理 →
-              </Button>
-            )
+            <Space size={12}>
+              {data.parseStatus === 'failed' && (
+                <Button type="link" danger onClick={() => navigate('/tasks/dead-letter')}>
+                  前往任务运维处理 →
+                </Button>
+              )}
+              <Tooltip title={canDelete ? '删除文档' : '解析中不可删除'}>
+                <Popconfirm
+                  title="确认删除该文档？"
+                  description="删除后将清理关联分块、向量与任务记录，且不可恢复。"
+                  okText="确认删除"
+                  cancelText="取消"
+                  okButtonProps={{ danger: true, loading: deleting }}
+                  onConfirm={() => doDelete(data.docId)}
+                  disabled={!canDelete}
+                >
+                  <Button type="primary" danger icon={<DeleteOutlined />} disabled={!canDelete}>
+                    删除文档
+                  </Button>
+                </Popconfirm>
+              </Tooltip>
+            </Space>
           }
         >
           <Descriptions.Item label="法规名称" span={2}>{data.lawName}</Descriptions.Item>
@@ -89,6 +118,29 @@ export default function FileDetailPage() {
             <Text code copyable={{ text: data.docId }}>{data.docId}</Text>
           </Descriptions.Item>
         </Descriptions>
+
+        <Alert
+          type="warning"
+          showIcon
+          message="危险操作"
+          description={canDelete ? '删除文档将永久清理该文档及其关联数据，且不可恢复。' : '文档正在解析中，暂不允许删除。'}
+          style={{ marginTop: 24 }}
+          action={(
+            <Popconfirm
+              title="确认删除该文档？"
+              description="删除后将清理关联分块、向量与任务记录，且不可恢复。"
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: deleting }}
+              onConfirm={() => doDelete(data.docId)}
+              disabled={!canDelete}
+            >
+              <Button type="primary" danger disabled={!canDelete}>
+                删除文档
+              </Button>
+            </Popconfirm>
+          )}
+        />
 
         {data.parseStatus === 'failed' && (
           <Alert

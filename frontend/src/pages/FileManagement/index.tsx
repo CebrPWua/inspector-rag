@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import {
   Button, Table, Modal, Form, Input, Select, Upload,
-  message, Typography, Space, Tooltip, Badge, Tag,
+  message, Typography, Space, Tooltip, Badge, Tag, Popconfirm,
 } from 'antd'
 import {
   UploadOutlined, EyeOutlined, InboxOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { getFileList, uploadFile } from '../../api/files'
+import { deleteFile, getFileList, uploadFile } from '../../api/files'
 import type { FileListItemResponse } from '../../types/api'
 import { formatTime } from '../../utils/format'
 import styles from './index.module.css'
@@ -48,6 +49,14 @@ export default function FileManagementPage() {
       setUploadModalOpen(false)
       form.resetFields()
       setUploadedFileObj(null)
+    },
+  })
+
+  const { mutate: doDelete, isPending: deleting } = useMutation({
+    mutationFn: (docId: string) => deleteFile(docId),
+    onSuccess: () => {
+      message.success('删除成功')
+      queryClient.invalidateQueries({ queryKey: ['files'] })
     },
   })
 
@@ -125,15 +134,33 @@ export default function FileManagementPage() {
     },
     {
       title: '操作',
-      width: 80,
+      width: 140,
       render: (_: unknown, row: FileListItemResponse) => (
-        <Tooltip title="查看详情">
-          <Button
-            type="link"
-            icon={<EyeOutlined />}
-            onClick={() => navigate(`/files/${row.docId}`)}
-          />
-        </Tooltip>
+        <Space size={4}>
+          <Tooltip title="查看详情">
+            <Button
+              type="link"
+              icon={<EyeOutlined />}
+              onClick={() => navigate(`/files/${row.docId}`)}
+            />
+          </Tooltip>
+          {(['pending', 'processing'] as string[]).includes(row.parseStatus) ? (
+            <Tooltip title="解析中不可删除">
+              <Button type="link" danger icon={<DeleteOutlined />} disabled />
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              title="确认删除该文档？"
+              description="删除后将级联清理关联解析/任务/向量数据，且不可恢复。"
+              okText="删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true, loading: deleting }}
+              onConfirm={() => doDelete(row.docId)}
+            >
+              <Button type="link" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          )}
+        </Space>
       ),
     },
   ]

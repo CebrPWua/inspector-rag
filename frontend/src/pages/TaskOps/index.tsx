@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import {
-  Button, Table, Modal, Form, Input, Select, Tooltip,
+  Button, Table, Modal, Form, Select, Tooltip,
   Tag, Typography, Popconfirm, message,
 } from 'antd'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
-  listDeadLetters, assignDeadLetter,
+  listDeadLetters,
   updateDeadLetterStatus, retryTask,
 } from '../../api/tasks'
 import type { DeadLetterTaskDto } from '../../types/api'
@@ -34,9 +34,7 @@ const TASK_TYPE_COLOR: Record<string, string> = {
 export default function TaskOpsPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
-  const [assignModal, setAssignModal] = useState<{ open: boolean; id: string }>({ open: false, id: '' })
   const [statusModal, setStatusModal] = useState<{ open: boolean; id: string; current: string }>({ open: false, id: '', current: '' })
-  const [assignForm] = Form.useForm()
   const [statusForm] = Form.useForm()
 
   const { data: deadLetters = [], isLoading } = useQuery({
@@ -46,12 +44,6 @@ export default function TaskOpsPage() {
   })
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['dead-letters'] })
-
-  const { mutate: doAssign, isPending: assigning } = useMutation({
-    mutationFn: ({ id, assignedTo }: { id: string; assignedTo: string }) =>
-      assignDeadLetter(id, assignedTo),
-    onSuccess: () => { message.success('指派成功'); setAssignModal({ open: false, id: '' }); invalidate() },
-  })
 
   const { mutate: doUpdateStatus, isPending: updatingStatus } = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -123,13 +115,6 @@ export default function TaskOpsPage() {
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           <Button
             size="small"
-            disabled={row.resolutionStatus !== 'open'}
-            onClick={() => { setAssignModal({ open: true, id: row.id }); assignForm.resetFields() }}
-          >
-            指派
-          </Button>
-          <Button
-            size="small"
             disabled={row.resolutionStatus === 'closed'}
             onClick={() => {
               setStatusModal({ open: true, id: row.id, current: row.resolutionStatus })
@@ -167,26 +152,6 @@ export default function TaskOpsPage() {
           locale={{ emptyText: '暂无死信任务' }}
         />
       </div>
-
-      {/* 指派 Modal */}
-      <Modal
-        title="指派处理人"
-        open={assignModal.open}
-        onOk={() => {
-          assignForm.validateFields().then(({ assignedTo }) =>
-            doAssign({ id: assignModal.id, assignedTo })
-          )
-        }}
-        onCancel={() => setAssignModal({ open: false, id: '' })}
-        confirmLoading={assigning}
-        okText="确认"
-      >
-        <Form form={assignForm} layout="vertical" style={{ marginTop: 16 }}>
-          <Form.Item name="assignedTo" label="处理人" rules={[{ required: true, whitespace: true, message: '请输入处理人' }]}>
-            <Input placeholder="如：alice" />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* 更新状态 Modal */}
       <Modal

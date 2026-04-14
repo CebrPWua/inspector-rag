@@ -11,3 +11,6 @@ export const getFileDetail = (docId: string): Promise<FileDetailResponse> =>
 
 export const getFileList = (limit = 200): Promise<FileListItemResponse[]> =>
   client.get('/files', { params: { limit } })
+
+export const deleteFile = (docId: string): Promise<void> =>
+  client.delete(`/files/${docId}`)

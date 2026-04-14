@@ -4,12 +4,6 @@ import type { DeadLetterTaskDto } from '../types/api'
 export const listDeadLetters = (): Promise<DeadLetterTaskDto[]> =>
   client.get('/tasks/dead-letter')
 
-export const assignDeadLetter = (
-  id: string,
-  assignedTo: string
-): Promise<void> =>
-  client.patch(`/tasks/dead-letter/${id}/assign`, { assignedTo })
-
 export const updateDeadLetterStatus = (
   id: string,
   status: string
