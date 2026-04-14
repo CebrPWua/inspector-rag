@@ -8,6 +8,7 @@ import RecordsPage from './pages/Records'
 import QaDetailPage from './pages/Records/QaDetail'
 import QaReplayPage from './pages/Records/QaReplay'
 import QualityReportPage from './pages/QualityReport'
+import QaConfigPage from './pages/QaConfig'
 
 export const router = createBrowserRouter([
   {
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
       { path: 'records/:qaId', element: <QaDetailPage /> },
       { path: 'records/:qaId/replay', element: <QaReplayPage /> },
       { path: 'reports', element: <QualityReportPage /> },
+      { path: 'qa-config', element: <QaConfigPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

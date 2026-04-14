@@ -2,7 +2,7 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom'
 import { Layout, Menu, Typography, ConfigProvider } from 'antd'
 import {
   SearchOutlined, FileTextOutlined, ToolOutlined,
-  HistoryOutlined, BarChartOutlined,
+  HistoryOutlined, BarChartOutlined, SettingOutlined,
 } from '@ant-design/icons'
 import './index.css'
 
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { key: '/tasks/dead-letter', label: '任务运维', icon: <ToolOutlined /> },
   { key: '/records', label: '审计记录', icon: <HistoryOutlined /> },
   { key: '/reports', label: '质量报表', icon: <BarChartOutlined /> },
+  { key: '/qa-config', label: '问答配置', icon: <SettingOutlined /> },
 ]
 
 export default function App() {

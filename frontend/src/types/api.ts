@@ -103,6 +103,25 @@ export interface ConversationMessageDto {
   evidences: EvidenceDto[]
 }
 
+export interface RejectThresholdConfigDto {
+  minTop1Score: number
+  minTop1ScoreVectorOnly: number
+  minTopGap: number
+  minConfidentScore: number
+  minEvidenceCount: number
+  updatedBy: string | null
+  updatedAt: string | null
+  source: 'db' | 'default'
+}
+
+export interface UpdateRejectThresholdConfigRequest {
+  minTop1Score: number
+  minTop1ScoreVectorOnly: number
+  minTopGap: number
+  minConfidentScore: number
+  minEvidenceCount: number
+}
+
 // --- records ---
 export interface QaRecordItemDto {
   qaId: string

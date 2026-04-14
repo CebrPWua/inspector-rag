@@ -15,11 +15,12 @@ import {
 import { MessageOutlined, SendOutlined, FilterOutlined } from '@ant-design/icons'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { askQuestion, getConversationMessages } from '../../api/qa'
+import { askQuestion, getConversationMessages, getQaDetail } from '../../api/qa'
+import { listQaRecords } from '../../api/records'
 import { AnswerContent } from '../../components/AnswerContent'
 import { EvidenceCard } from '../../components/EvidenceCard'
 import { useUIStore } from '../../store/uiStore'
-import type { AskResponse, ConversationMessageDto } from '../../types/api'
+import type { AskResponse, ConversationMessageDto, QaRecordItemDto } from '../../types/api'
 import styles from './index.module.css'
 
 const { Title, Text } = Typography
@@ -47,6 +48,13 @@ type ChatMessage =
     }
 
 const EMPTY_HISTORY: ConversationMessageDto[] = []
+const CONVERSATION_HISTORY_LIMIT = 30
+
+type ConversationSummary = {
+  conversationId: string
+  lastQuestion: string
+  updatedAt: string
+}
 
 function mapConversationToMessages(items: ConversationMessageDto[]): ChatMessage[] {
   const result: ChatMessage[] = []
@@ -67,6 +75,27 @@ function mapConversationToMessages(items: ConversationMessageDto[]): ChatMessage
   return result
 }
 
+async function buildConversationHistory(records: QaRecordItemDto[]): Promise<ConversationSummary[]> {
+  const details = await Promise.allSettled(
+    records.slice(0, CONVERSATION_HISTORY_LIMIT * 3).map((record) => getQaDetail(record.qaId)),
+  )
+  const historyMap = new Map<string, ConversationSummary>()
+  details.forEach((result, idx) => {
+    if (result.status !== 'fulfilled') return
+    const detail = result.value
+    if (!detail.conversationId || historyMap.has(detail.conversationId)) return
+    const fallbackRecord = records[idx]
+    historyMap.set(detail.conversationId, {
+      conversationId: detail.conversationId,
+      lastQuestion: detail.question || fallbackRecord?.question || '',
+      updatedAt: detail.createdAt || fallbackRecord?.createdAt || new Date().toISOString(),
+    })
+  })
+  return Array.from(historyMap.values())
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, CONVERSATION_HISTORY_LIMIT)
+}
+
 export default function QaSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [question, setQuestion] = useState('')
@@ -75,6 +104,21 @@ export default function QaSearchPage() {
   const [form] = Form.useForm()
   const chatListRef = useRef<HTMLDivElement>(null)
   const { highlightedCiteNo, setHighlightedCiteNo, setCurrentQaId } = useUIStore()
+
+  const { data: recentQaRecords = [] } = useQuery({
+    queryKey: ['records', 'qa-history-options'],
+    queryFn: () => listQaRecords(100),
+    refetchInterval: 30000,
+  })
+
+  const {
+    data: conversationHistory = [],
+    isFetching: conversationOptionsLoading,
+  } = useQuery({
+    queryKey: ['qa-conversation-history-options', recentQaRecords.map((item) => item.qaId).join(',')],
+    queryFn: () => buildConversationHistory(recentQaRecords),
+    enabled: recentQaRecords.length > 0,
+  })
 
   const { data: historyData, isFetching: historyLoading } = useQuery({
     queryKey: ['qa-conversation', conversationId],
@@ -98,14 +142,14 @@ export default function QaSearchPage() {
 
   const { mutate: doAsk, isPending } = useMutation({
     mutationFn: askQuestion,
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       setCurrentQaId(data.qaId)
       setConversationId(data.conversationId)
       setSearchParams({ c: data.conversationId })
 
       setMessages((prev) => ([
         ...prev,
-        { role: 'user', qaId: data.qaId, turnNo: data.turnNo, text: question },
+        { role: 'user', qaId: data.qaId, turnNo: data.turnNo, text: variables.question },
         {
           role: 'assistant',
           qaId: data.qaId,
@@ -131,6 +175,8 @@ export default function QaSearchPage() {
 
   const handleAsk = () => {
     if (!canSend) return
+    const trimmedQuestion = question.trim()
+    if (!trimmedQuestion) return
     const filters = form.getFieldsValue()
     const cleanFilters: Record<string, unknown> = {}
     if (filters.industryTags?.length) cleanFilters.industryTags = filters.industryTags
@@ -139,7 +185,7 @@ export default function QaSearchPage() {
     if (filters.effectiveOn) cleanFilters.effectiveOn = filters.effectiveOn.format('YYYY-MM-DD')
 
     doAsk({
-      question: question.trim(),
+      question: trimmedQuestion,
       conversationId: conversationId ?? undefined,
       filters: Object.keys(cleanFilters).length ? cleanFilters : undefined,
     })
@@ -153,6 +199,17 @@ export default function QaSearchPage() {
     setHighlightedCiteNo(null)
   }
 
+  const handleSwitchConversation = (nextConversationId: string) => {
+    setConversationId(nextConversationId)
+    setSearchParams({ c: nextConversationId })
+    setHighlightedCiteNo(null)
+  }
+
+  const historyOptions = useMemo(() => conversationHistory.map((item) => ({
+    value: item.conversationId,
+    label: `#${item.conversationId} · ${item.lastQuestion.slice(0, 26)}${item.lastQuestion.length > 26 ? '…' : ''}`,
+  })), [conversationHistory])
+
   return (
     <div className={styles.page}>
       <div className={styles.headerRow}>
@@ -160,7 +217,25 @@ export default function QaSearchPage() {
           <Title level={3} className={styles.title}><MessageOutlined /> 法规对话助手</Title>
           <Text type="secondary">{headerTip}</Text>
         </div>
-        <Button onClick={resetConversation} disabled={isPending}>新建会话</Button>
+        <div className={styles.headerActions}>
+          <Select
+            className={styles.historySelect}
+            placeholder={conversationHistory.length ? '切换历史会话' : '暂无历史会话'}
+            value={conversationId ?? undefined}
+            options={historyOptions}
+            loading={conversationOptionsLoading}
+            allowClear
+            disabled={isPending || conversationHistory.length === 0}
+            onChange={(value) => {
+              if (!value) {
+                resetConversation()
+                return
+              }
+              handleSwitchConversation(value)
+            }}
+          />
+          <Button onClick={resetConversation} disabled={isPending}>新建会话</Button>
+        </div>
       </div>
 
       <div className={styles.filterCard}>

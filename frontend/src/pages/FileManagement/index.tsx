@@ -83,10 +83,16 @@ export default function FileManagementPage() {
     {
       title: '法规编码',
       dataIndex: 'lawCode',
-      width: 130,
+      width: 220,
       render: (v: string | null) => (
         v
-          ? <Text code copyable style={{ fontSize: 12 }}>{v}</Text>
+          ? (
+            <Tooltip title={v}>
+              <Text code className={styles.lawCodeText}>
+                {v.length > 20 ? `${v.slice(0, 20)}...` : v}
+              </Text>
+            </Tooltip>
+          )
           : <Text type="secondary">-</Text>
       ),
     },
