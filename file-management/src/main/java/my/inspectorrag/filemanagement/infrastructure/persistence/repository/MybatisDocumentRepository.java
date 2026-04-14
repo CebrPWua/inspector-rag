@@ -5,23 +5,36 @@ import my.inspectorrag.filemanagement.domain.model.FileListItem;
 import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentCommandMapper;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentQueryMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Pattern;
 
 @Primary
 @Repository
 public class MybatisDocumentRepository implements DocumentRepository {
 
+    private static final Logger log = LoggerFactory.getLogger(MybatisDocumentRepository.class);
+    private static final Pattern QUALIFIED_IDENTIFIER = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)?$");
+
     private final DocumentCommandMapper commandMapper;
     private final DocumentQueryMapper queryMapper;
+    private final JdbcTemplate jdbcTemplate;
 
-    public MybatisDocumentRepository(DocumentCommandMapper commandMapper, DocumentQueryMapper queryMapper) {
+    public MybatisDocumentRepository(
+            DocumentCommandMapper commandMapper,
+            DocumentQueryMapper queryMapper,
+            JdbcTemplate jdbcTemplate
+    ) {
         this.commandMapper = commandMapper;
         this.queryMapper = queryMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     @Override
@@ -96,5 +109,57 @@ public class MybatisDocumentRepository implements DocumentRepository {
                         row.createdAt()
                 ))
                 .toList();
+    }
+
+    @Override
+    public void deleteVectorsByDocId(Long docId) {
+        List<String> storageTables = findVectorTables();
+        if (storageTables.isEmpty()) {
+            return;
+        }
+        for (String table : storageTables) {
+            String safeTable = safeTable(table);
+            String sql = """
+                    delete from %s r
+                    using ingest.law_chunk c
+                     where c.doc_id = ?
+                       and r.id = c.id::text
+                    """.formatted(safeTable);
+            try {
+                jdbcTemplate.update(sql, docId);
+            } catch (Exception ex) {
+                log.warn("failed deleting vectors for docId={} table={}", docId, safeTable, ex);
+                throw ex;
+            }
+        }
+    }
+
+    @Override
+    public int deleteSourceDocument(Long docId) {
+        return commandMapper.deleteSourceDocument(docId);
+    }
+
+    private List<String> findVectorTables() {
+        try {
+            return jdbcTemplate.queryForList(
+                    """
+                    select distinct storage_table
+                      from indexing.embedding_profile
+                     where storage_table is not null
+                    """,
+                    String.class
+            );
+        } catch (Exception ex) {
+            // fallback for legacy deployment before embedding_profile migration
+            log.warn("embedding_profile lookup failed, fallback to legacy vector table", ex);
+            return List.of("indexing.rag_law_chunk_store");
+        }
+    }
+
+    private String safeTable(String storageTable) {
+        if (storageTable == null || !QUALIFIED_IDENTIFIER.matcher(storageTable).matches()) {
+            throw new IllegalArgumentException("invalid storage table identifier: " + storageTable);
+        }
+        return storageTable;
     }
 }

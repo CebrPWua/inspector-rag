@@ -170,4 +170,64 @@ class FileApplicationServiceTest {
         assertEquals("regulation", list.get(0).docType());
         assertEquals("success", list.get(0).parseStatus());
     }
+
+    @Test
+    void deleteShouldFailWhenDocumentNotExists() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        when(documentRepository.findFileDetail(100L)).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.deleteFile(100L));
+
+        assertTrue(ex.getMessage().contains("document not found"));
+        verify(documentRepository, never()).deleteVectorsByDocId(anyLong());
+        verify(documentRepository, never()).deleteSourceDocument(anyLong());
+    }
+
+    @Test
+    void deleteShouldFailWhenParseIsPendingOrProcessing() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        OffsetDateTime now = OffsetDateTime.now();
+        when(documentRepository.findFileDetail(101L)).thenReturn(Optional.of(
+                new FileDetail(101L, "法规", "LAW", "standard", "v1", "active", "processing", "law.txt", "hash", "/tmp/law.txt", now)
+        ));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.deleteFile(101L));
+
+        assertTrue(ex.getMessage().contains("cannot be deleted"));
+        verify(documentRepository, never()).deleteVectorsByDocId(anyLong());
+        verify(documentRepository, never()).deleteSourceDocument(anyLong());
+        verify(objectStorageGateway, never()).delete(anyString());
+    }
+
+    @Test
+    void deleteShouldCleanupVectorsDocumentAndStorageWhenParseFinished() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        OffsetDateTime now = OffsetDateTime.now();
+        when(documentRepository.findFileDetail(102L)).thenReturn(Optional.of(
+                new FileDetail(102L, "法规", "LAW", "standard", "v1", "active", "success", "law.txt", "hash", "/tmp/law.txt", now)
+        ));
+        when(documentRepository.deleteSourceDocument(102L)).thenReturn(1);
+
+        service.deleteFile(102L);
+
+        verify(documentRepository).deleteVectorsByDocId(102L);
+        verify(documentRepository).deleteSourceDocument(102L);
+        verify(objectStorageGateway).delete("/tmp/law.txt");
+    }
+
+    @Test
+    void deleteShouldNotRollbackWhenStorageDeletionFails() {
+        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        OffsetDateTime now = OffsetDateTime.now();
+        when(documentRepository.findFileDetail(103L)).thenReturn(Optional.of(
+                new FileDetail(103L, "法规", "LAW", "standard", "v1", "active", "failed", "law.txt", "hash", "/tmp/law.txt", now)
+        ));
+        when(documentRepository.deleteSourceDocument(103L)).thenReturn(1);
+        doThrow(new IllegalArgumentException("storage failed")).when(objectStorageGateway).delete("/tmp/law.txt");
+
+        assertDoesNotThrow(() -> service.deleteFile(103L));
+        verify(documentRepository).deleteVectorsByDocId(103L);
+        verify(documentRepository).deleteSourceDocument(103L);
+        verify(objectStorageGateway).delete("/tmp/law.txt");
+    }
 }

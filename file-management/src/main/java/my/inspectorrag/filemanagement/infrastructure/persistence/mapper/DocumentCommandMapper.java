@@ -3,6 +3,7 @@ package my.inspectorrag.filemanagement.infrastructure.persistence.mapper;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Select;
 
 import java.time.OffsetDateTime;
@@ -62,4 +63,18 @@ public interface DocumentCommandMapper {
             @Param("taskType") String taskType,
             @Param("now") OffsetDateTime now
     );
+
+    @Delete("""
+            delete from indexing.rag_law_chunk_store r
+            using ingest.law_chunk c
+             where c.doc_id = #{docId}
+               and r.id = c.id::text
+            """)
+    void deleteVectorsByDocId(@Param("docId") Long docId);
+
+    @Delete("""
+            delete from ingest.source_document
+             where id = #{docId}
+            """)
+    int deleteSourceDocument(@Param("docId") Long docId);
 }

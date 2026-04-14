@@ -15,14 +15,7 @@ spring:
           model: ${SPRING_AI_OPENAI_CHAT_MODEL:openai/gpt-5-mini}
       embedding:
         options:
-          model: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:openai/text-embedding-3-small}
-    vectorstore:
-      pgvector:
-        initialize-schema: ${SPRING_AI_PGVECTOR_INIT_SCHEMA:false}
-        table-name: ${SPRING_AI_PGVECTOR_TABLE:rag_law_chunk_store}
-        schema-name: ${SPRING_AI_PGVECTOR_SCHEMA:indexing}
-        id-type: ${SPRING_AI_PGVECTOR_ID_TYPE:TEXT}
-        dimensions: ${EMBEDDING_MODEL_DIMENSION:1536}
+          model: ${SPRING_AI_OPENAI_EMBEDDING_MODEL:qwen/qwen3-embedding-8b}
 
 server:
   port: ${SERVER_PORT:8084}
@@ -35,8 +28,13 @@ management:
 
 inspector:
   embedding:
-    model-name: ${EMBEDDING_MODEL_NAME:openai/text-embedding-3-small}
+    model-name: ${EMBEDDING_MODEL_NAME:qwen/qwen3-embedding-8b}
     top-k: ${QA_TOP_K:8}
+    router:
+      mode: ${EMBEDDING_ROUTER_MODE:default}
+      canary-percent: ${EMBEDDING_ROUTER_CANARY_PERCENT:0}
+      forced-profile: ${EMBEDDING_ROUTER_FORCED_PROFILE:}
+      quantized-rerank-multiplier: ${EMBEDDING_ROUTER_QUANTIZED_RERANK_MULTIPLIER:8}
   retrieval:
     phase2:
       keyword-topk: ${QA_KEYWORD_TOP_K:20}

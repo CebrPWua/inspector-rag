@@ -9,6 +9,8 @@ import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.FileListItemResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -22,6 +24,8 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class FileApplicationService {
+
+    private static final Logger log = LoggerFactory.getLogger(FileApplicationService.class);
 
     private final DocumentRepository documentRepository;
     private final ObjectStorageGateway objectStorageGateway;
@@ -133,6 +137,29 @@ public class FileApplicationService {
                         item.createdAt()
                 ))
                 .toList();
+    }
+
+    @Transactional
+    public void deleteFile(Long docId) {
+        FileDetail detail = documentRepository.findFileDetail(docId)
+                .orElseThrow(() -> new IllegalArgumentException("document not found: " + docId));
+
+        if ("pending".equals(detail.parseStatus()) || "processing".equals(detail.parseStatus())) {
+            throw new IllegalArgumentException("document is being parsed and cannot be deleted: " + docId);
+        }
+
+        documentRepository.deleteVectorsByDocId(docId);
+        int affected = documentRepository.deleteSourceDocument(docId);
+        if (affected <= 0) {
+            throw new IllegalArgumentException("document not found: " + docId);
+        }
+
+        try {
+            objectStorageGateway.delete(detail.storagePath());
+        } catch (Exception ex) {
+            // Best effort cleanup for object storage; DB deletion should remain successful.
+            log.warn("failed to delete storage object for docId={}, storagePath={}", docId, detail.storagePath(), ex);
+        }
     }
 
     private String toIdString(Long id) {

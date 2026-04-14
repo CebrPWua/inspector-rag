@@ -31,4 +31,16 @@ public class LocalObjectStorageGateway implements ObjectStorageGateway {
             throw new IllegalArgumentException("failed to store file to local storage", e);
         }
     }
+
+    @Override
+    public void delete(String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(Paths.get(storagePath));
+        } catch (IOException e) {
+            throw new IllegalArgumentException("failed to delete file from local storage", e);
+        }
+    }
 }

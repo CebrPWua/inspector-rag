@@ -38,13 +38,14 @@ public interface QaCommandMapper {
 
     @Insert("""
             insert into retrieval.qa_retrieval_snapshot
-            (id, qa_id, filters_json, query_embedding_model, topk_requested, topn_returned, keyword_query, effective_query, rewrite_queries_json, created_at, updated_at)
-            values (#{id}, #{qaId}, #{filtersJson}::jsonb, #{modelName}, #{topK}, #{topN}, #{keywordQuery}, #{effectiveQuery}, #{rewriteQueriesJson}::jsonb, #{now}, #{now})
+            (id, qa_id, filters_json, query_embedding_model, query_embedding_profile, topk_requested, topn_returned, keyword_query, effective_query, rewrite_queries_json, created_at, updated_at)
+            values (#{id}, #{qaId}, #{filtersJson}::jsonb, #{modelName}, #{profileKey}, #{topK}, #{topN}, #{keywordQuery}, #{effectiveQuery}, #{rewriteQueriesJson}::jsonb, #{now}, #{now})
             """)
     void insertRetrievalSnapshot(
             @Param("id") Long id,
             @Param("qaId") Long qaId,
             @Param("modelName") String modelName,
+            @Param("profileKey") String profileKey,
             @Param("topK") int topK,
             @Param("topN") int topN,
             @Param("filtersJson") String filtersJson,

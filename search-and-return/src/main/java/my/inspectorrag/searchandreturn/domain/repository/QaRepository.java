@@ -57,6 +57,7 @@ public interface QaRepository {
             Long id,
             Long qaId,
             String modelName,
+            String profileKey,
             int topK,
             int topN,
             String filtersJson,

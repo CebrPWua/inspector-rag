@@ -130,6 +130,8 @@ public class QaApplicationService {
                 contextTurns
         );
         RewriteContext rewriteContext = resolveRewriteContext(question, normalized, context);
+        String routeKey = String.valueOf(conversationScope.conversationId());
+        String embeddingProfileKey = recallService.resolveProfileKey(routeKey);
 
         List<RecallCandidate> vectorCandidates = new ArrayList<>();
         List<RecallCandidate> keywordCandidates = new ArrayList<>();
@@ -137,7 +139,12 @@ public class QaApplicationService {
         for (String query : rewriteContext.candidateQueries()) {
             List<String> keywords = extractKeywords(query);
             allKeywords.addAll(keywords);
-            List<RecallCandidate> queryVectorCandidates = recallService.recall(query, topK * VECTOR_RECALL_MULTIPLIER, filters);
+            List<RecallCandidate> queryVectorCandidates = recallService.recall(
+                    query,
+                    topK * VECTOR_RECALL_MULTIPLIER,
+                    filters,
+                    routeKey
+            );
             if (!queryVectorCandidates.isEmpty() && hasMetadataFilters(filters)) {
                 queryVectorCandidates = applyMetadataFilter(queryVectorCandidates, filters);
             }
@@ -203,6 +210,7 @@ public class QaApplicationService {
                     newId(),
                     qaId,
                     embeddingModelName,
+                    embeddingProfileKey,
                     topK,
                     mergedCandidates.size(),
                     toFiltersJson(filters),
@@ -251,6 +259,7 @@ public class QaApplicationService {
                 newId(),
                 qaId,
                 embeddingModelName,
+                embeddingProfileKey,
                 topK,
                 mergedCandidates.size(),
                 toFiltersJson(filters),

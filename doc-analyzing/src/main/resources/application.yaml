@@ -18,7 +18,7 @@ management:
 
 inspector:
   storage:
-    mode: ${STORAGE_MODE:local}
+    mode: ${STORAGE_MODE:rustfs}
     rustfs:
       endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
       access-key: ${RUSTFS_ACCESS_KEY:}

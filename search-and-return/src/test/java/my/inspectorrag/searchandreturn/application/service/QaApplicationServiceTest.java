@@ -64,7 +64,7 @@ class QaApplicationServiceTest {
     void askShouldCreateConversationAndPersistSuccess() {
         QaApplicationService service = buildService(0.10, 0.01, 0.90, 1);
         when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of(
                 new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.91, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
@@ -82,7 +82,7 @@ class QaApplicationServiceTest {
     @Test
     void askShouldThrowWhenNoEvidence() {
         QaApplicationService service = buildDefaultService();
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of());
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of());
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.ask("问题", null, null));
@@ -94,7 +94,7 @@ class QaApplicationServiceTest {
     void askShouldReturnRejectGuidanceWhenLowConfidence() {
         QaApplicationService service = buildDefaultService();
         when(answerGenerator.generateLowConfidenceGuidance(anyString(), anyString(), anyList())).thenReturn("建议补充作业场景后重试");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of(
                 new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.2, 1, 1, "v1"),
                 new RecallCandidate(2L, "法规B", "第2条", "内容B", 0.1, 1, 1, "v1")
         ));
@@ -117,7 +117,7 @@ class QaApplicationServiceTest {
                 new ConversationContextTurn("上一问", "改写上一问", "上一答", "success")
         ));
         when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of(
                 new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.91, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
@@ -136,7 +136,7 @@ class QaApplicationServiceTest {
         when(questionRewriteService.rewrite(anyString(), anyString(), anyList()))
                 .thenThrow(new IllegalArgumentException("rewrite failed"));
         when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of(
                 new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.95, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());
@@ -185,7 +185,7 @@ class QaApplicationServiceTest {
         when(qaRepository.existsConversation(555L)).thenReturn(true);
         when(qaRepository.nextTurnNo(555L)).thenReturn(8);
         when(answerGenerator.generate(anyString(), anyString(), anyList(), anyList())).thenReturn("mock answer");
-        when(recallService.recall(anyString(), anyInt(), any())).thenReturn(List.of(
+        when(recallService.recall(anyString(), anyInt(), any(), anyString())).thenReturn(List.of(
                 new RecallCandidate(1L, "法规A", "第1条", "内容A", 0.95, 1, 1, "v1")
         ));
         when(qaRepository.keywordRecall(anyString(), anyList(), anyInt(), any(), anyString())).thenReturn(List.of());

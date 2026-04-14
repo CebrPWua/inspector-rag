@@ -39,4 +39,8 @@ public interface DocumentRepository {
     Optional<FileDetail> findFileDetail(Long docId);
 
     List<FileListItem> listFiles(int limit);
+
+    void deleteVectorsByDocId(Long docId);
+
+    int deleteSourceDocument(Long docId);
 }

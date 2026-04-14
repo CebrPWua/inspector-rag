@@ -24,10 +24,11 @@ dependencies {
     implementation("com.baomidou:mybatis-plus-spring-boot4-starter:3.5.16")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
-    implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
 }
 
 tasks.withType<Test> {

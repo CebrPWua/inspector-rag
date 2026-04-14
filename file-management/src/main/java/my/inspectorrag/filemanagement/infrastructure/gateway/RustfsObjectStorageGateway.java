@@ -9,6 +9,7 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
@@ -51,6 +52,24 @@ public class RustfsObjectStorageGateway implements ObjectStorageGateway {
                 RequestBody.fromBytes(content)
         );
         return "s3://" + bucket + "/" + key;
+    }
+
+    @Override
+    public void delete(String storagePath) {
+        if (storagePath == null || storagePath.isBlank()) {
+            return;
+        }
+        String normalizedPrefix = "s3://" + bucket + "/";
+        if (!storagePath.startsWith(normalizedPrefix)) {
+            throw new IllegalArgumentException("unexpected storage path: " + storagePath);
+        }
+        String key = storagePath.substring(normalizedPrefix.length());
+        s3Client.deleteObject(
+                DeleteObjectRequest.builder()
+                        .bucket(bucket)
+                        .key(key)
+                        .build()
+        );
     }
 
     private String normalizeHttpUri(String endpoint) {

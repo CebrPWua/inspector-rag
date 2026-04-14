@@ -123,14 +123,14 @@ class MybatisQaRepositoryTest {
         repository.insertConversation(99L, now);
         repository.insertQaRecord(1L, 99L, 1, "q", "nq", "rw", "a", 123, now);
         repository.insertRejectedQaRecord(2L, 99L, 2, "q2", "nq2", "rw2", "hint", "NO_EVIDENCE: x", 66, now);
-        repository.insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
+        repository.insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", "qwen3_2048_v1", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
         repository.insertCandidate(4L, 1L, 10L, "hybrid", 0.8, 0.7, 0.75, 1, now);
         repository.insertEvidence(5L, 1L, candidate, 1, now);
 
         verify(commandMapper).insertConversation(99L, now);
         verify(commandMapper).insertQaRecord(1L, 99L, 1, "q", "nq", "rw", "a", 123, now);
         verify(commandMapper).insertRejectedQaRecord(2L, 99L, 2, "q2", "nq2", "rw2", "hint", "NO_EVIDENCE: x", 66, now);
-        verify(commandMapper).insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
+        verify(commandMapper).insertRetrievalSnapshot(3L, 1L, "text-embedding-3-small", "qwen3_2048_v1", 20, 8, "{}", "关键词", "有效查询", "[\"q1\"]", now);
         verify(commandMapper).insertCandidate(4L, 1L, 10L, "hybrid", 0.8, 0.7, 0.75, 1, now);
         verify(commandMapper).insertEvidence(5L, 1L, 10L, 1, "内容", "法规", "第3条", 1, 1, "v1", now);
     }

@@ -8,6 +8,7 @@ import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.FileListItemResponse;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,5 +53,11 @@ public class FileController {
             @RequestParam(value = "limit", defaultValue = "200") Integer limit
     ) {
         return ApiResponse.ok(fileApplicationService.listFiles(limit));
+    }
+
+    @DeleteMapping("/{docId}")
+    public ApiResponse<Void> delete(@PathVariable("docId") Long docId) {
+        fileApplicationService.deleteFile(docId);
+        return ApiResponse.ok(null);
     }
 }

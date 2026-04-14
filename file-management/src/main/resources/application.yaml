@@ -18,7 +18,7 @@ management:
 
 inspector:
   storage:
-    mode: ${STORAGE_MODE:local}
+    mode: ${STORAGE_MODE:rustfs}
     root-dir: ${STORAGE_ROOT_DIR:/tmp/inspector-rag-storage}
     rustfs:
       endpoint: ${RUSTFS_ENDPOINT:http://localhost:9000}
