@@ -19,7 +19,12 @@ public interface DocumentQueryMapper {
                    sd.parse_status,
                    sd.source_file_name,
                    sd.file_hash,
+                   df.id as file_id,
                    df.storage_path,
+                   df.mime_type,
+                   df.file_size_bytes,
+                   df.sha256 as file_sha256,
+                   df.upload_batch_no,
                    sd.created_at
               from ingest.source_document sd
              left join ingest.document_file df on df.doc_id = sd.id and df.is_primary = true

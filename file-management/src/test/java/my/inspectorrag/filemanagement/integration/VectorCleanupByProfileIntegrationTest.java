@@ -2,7 +2,8 @@ package my.inspectorrag.filemanagement.integration;
 
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentCommandMapper;
 import my.inspectorrag.filemanagement.infrastructure.persistence.mapper.DocumentQueryMapper;
-import my.inspectorrag.filemanagement.infrastructure.persistence.repository.MybatisDocumentRepository;
+import my.inspectorrag.filemanagement.domain.model.value.DocumentId;
+import my.inspectorrag.filemanagement.infrastructure.persistence.repository.MybatisDocumentAggregateRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -24,7 +25,7 @@ class VectorCleanupByProfileIntegrationTest {
             .withPassword("postgres");
 
     private JdbcTemplate jdbcTemplate;
-    private MybatisDocumentRepository repository;
+    private MybatisDocumentAggregateRepository repository;
 
     @BeforeEach
     void setUp() {
@@ -83,7 +84,7 @@ class VectorCleanupByProfileIntegrationTest {
 
         DocumentCommandMapper commandMapper = Mockito.mock(DocumentCommandMapper.class);
         DocumentQueryMapper queryMapper = Mockito.mock(DocumentQueryMapper.class);
-        repository = new MybatisDocumentRepository(commandMapper, queryMapper, jdbcTemplate);
+        repository = new MybatisDocumentAggregateRepository(commandMapper, queryMapper, jdbcTemplate);
     }
 
     @Test
@@ -103,7 +104,7 @@ class VectorCleanupByProfileIntegrationTest {
         insert1024("1002");
         insert1024("2001");
 
-        repository.deleteVectorsByDocId(5001L);
+        repository.deleteVectorsByDocId(DocumentId.of(5001L));
 
         Integer remain2048 = jdbcTemplate.queryForObject("select count(*) from indexing.rag_chunk_vec_qwen3_2048_v1", Integer.class);
         Integer remain1024 = jdbcTemplate.queryForObject("select count(*) from indexing.rag_chunk_vec_qwen3_1024_v1", Integer.class);
