@@ -1,7 +1,11 @@
 package my.inspectorrag.embedding.application.service;
 
 import my.inspectorrag.embedding.application.command.EmbedTaskCommand;
+import my.inspectorrag.embedding.domain.model.EmbedExecution;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
+import my.inspectorrag.embedding.domain.model.value.ChunkId;
+import my.inspectorrag.embedding.domain.model.value.EmbeddingStatus;
+import my.inspectorrag.embedding.domain.model.value.TaskStatus;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
 import my.inspectorrag.embedding.domain.service.VectorIndexService;
 import org.junit.jupiter.api.Test;
@@ -30,8 +34,8 @@ class EmbeddingApplicationServiceTest {
                 vectorIndexService
         );
 
-        when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
-                new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
+        when(embeddingRepository.findPendingChunks(any(), eq(500))).thenReturn(List.of(
+                new PendingChunk(ChunkId.of(10L), "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
         ));
 
         var response = service.embed(new EmbedTaskCommand(99L, 1L));
@@ -40,8 +44,9 @@ class EmbeddingApplicationServiceTest {
         assertEquals(1L, response.docId());
         assertEquals(1, response.processedChunks());
         verify(vectorIndexService).upsert(any());
-        verify(embeddingRepository).markChunkStatus(10L, "success");
-        verify(embeddingRepository).markTaskStatus(99L, "success", null);
+        verify(embeddingRepository).markChunkStatus(eq(ChunkId.of(10L)), eq(EmbeddingStatus.SUCCESS));
+        verify(embeddingRepository).markTaskCompleted(argThat(exec ->
+                exec.taskStatus() == TaskStatus.SUCCESS && exec.processedChunks() == 1));
     }
 
     @Test
@@ -51,12 +56,13 @@ class EmbeddingApplicationServiceTest {
                 vectorIndexService
         );
 
-        when(embeddingRepository.findPendingChunks(1L, 500)).thenReturn(List.of(
-                new PendingChunk(10L, "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
+        when(embeddingRepository.findPendingChunks(any(), eq(500))).thenReturn(List.of(
+                new PendingChunk(ChunkId.of(10L), "法规", "章", "节", "第1条", "正文", 1, 1, "v1", "active")
         ));
         doThrow(new IllegalStateException("mock fail")).when(vectorIndexService).upsert(any());
 
         assertThrows(IllegalStateException.class, () -> service.embed(new EmbedTaskCommand(99L, 1L)));
-        verify(embeddingRepository).markTaskStatus(eq(99L), eq("failed"), contains("mock fail"));
+        verify(embeddingRepository).markTaskFailed(argThat(exec ->
+                exec.taskStatus() == TaskStatus.FAILED && exec.errorMessage().contains("mock fail")));
     }
 }

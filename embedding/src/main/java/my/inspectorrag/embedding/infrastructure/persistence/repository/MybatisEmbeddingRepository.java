@@ -1,6 +1,10 @@
 package my.inspectorrag.embedding.infrastructure.persistence.repository;
 
+import my.inspectorrag.embedding.domain.model.EmbedExecution;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
+import my.inspectorrag.embedding.domain.model.value.ChunkId;
+import my.inspectorrag.embedding.domain.model.value.DocumentId;
+import my.inspectorrag.embedding.domain.model.value.EmbeddingStatus;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
 import my.inspectorrag.embedding.infrastructure.persistence.mapper.EmbeddingCommandMapper;
 import my.inspectorrag.embedding.infrastructure.persistence.mapper.EmbeddingQueryMapper;
@@ -22,15 +26,37 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
     }
 
     @Override
-    public void markTaskStatus(Long taskId, String status, String errorMsg) {
-        commandMapper.markTaskStatus(taskId, status, errorMsg);
+    public void markTaskStarted(EmbedExecution execution) {
+        commandMapper.markTaskStatus(
+                execution.taskId().value(),
+                execution.taskStatus().dbValue(),
+                null
+        );
     }
 
     @Override
-    public List<PendingChunk> findPendingChunks(Long docId, int limit) {
-        return queryMapper.findPendingChunks(docId, limit).stream()
+    public void markTaskCompleted(EmbedExecution execution) {
+        commandMapper.markTaskStatus(
+                execution.taskId().value(),
+                execution.taskStatus().dbValue(),
+                null
+        );
+    }
+
+    @Override
+    public void markTaskFailed(EmbedExecution execution) {
+        commandMapper.markTaskStatus(
+                execution.taskId().value(),
+                execution.taskStatus().dbValue(),
+                execution.errorMessage()
+        );
+    }
+
+    @Override
+    public List<PendingChunk> findPendingChunks(DocumentId docId, int limit) {
+        return queryMapper.findPendingChunks(docId.value(), limit).stream()
                 .map(row -> new PendingChunk(
-                        row.chunkId(),
+                        ChunkId.of(row.chunkId()),
                         row.lawName(),
                         row.chapterTitle(),
                         row.sectionTitle(),
@@ -45,7 +71,7 @@ public class MybatisEmbeddingRepository implements EmbeddingRepository {
     }
 
     @Override
-    public void markChunkStatus(Long chunkId, String status) {
-        commandMapper.markChunkStatus(chunkId, status);
+    public void markChunkStatus(ChunkId chunkId, EmbeddingStatus status) {
+        commandMapper.markChunkStatus(chunkId.value(), status.dbValue());
     }
 }
