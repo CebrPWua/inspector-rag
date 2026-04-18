@@ -38,18 +38,19 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
 
     @Override
     public void upsert(PendingChunk chunk) {
-        float[] rawVector = embeddingModel.embed(buildEmbeddingInput(chunk));
+        String embeddingInput = chunk.toEmbeddingText().value();
+        float[] rawVector = embeddingModel.embed(embeddingInput);
         if (rawVector == null || rawVector.length == 0) {
             throw new IllegalStateException("embedding model returned empty vector");
         }
 
-        List<EmbeddingProfile> profiles = loadWriteProfiles();
+        List<WriteProfile> profiles = loadWriteProfiles();
         if (profiles.isEmpty()) {
             throw new IllegalStateException("no write-enabled embedding profile found");
         }
 
         Map<String, Object> metadata = new HashMap<>();
-        metadata.put("chunkId", chunk.chunkId());
+        metadata.put("chunkId", chunk.chunkId().value());
         metadata.put("lawName", nullSafe(chunk.lawName()));
         metadata.put("articleNo", nullSafe(chunk.articleNo()));
         metadata.put("chapterTitle", nullSafe(chunk.chapterTitle()));
@@ -64,9 +65,8 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
             metadata.put("pageEnd", chunk.pageEnd());
         }
 
-        String text = buildEmbeddingInput(chunk);
         String metadataJson = toJson(metadata);
-        for (EmbeddingProfile profile : profiles) {
+        for (WriteProfile profile : profiles) {
             float[] vector = projectVector(rawVector, profile.dimension());
             String table = safeTable(profile.storageTable());
             String castType = castType(profile.vectorType(), profile.dimension());
@@ -80,12 +80,12 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
                         embedding = excluded.embedding,
                         updated_at = now()
                     """.formatted(table, castType);
-            jdbcTemplate.update(upsertSql, String.valueOf(chunk.chunkId()), text, metadataJson, vectorLiteral);
+            jdbcTemplate.update(upsertSql, String.valueOf(chunk.chunkId().value()), embeddingInput, metadataJson, vectorLiteral);
         }
-        log.debug("vector upserted for chunkId={}, writeProfiles={}", chunk.chunkId(), profiles.size());
+        log.debug("vector upserted for chunkId={}, writeProfiles={}", chunk.chunkId().value(), profiles.size());
     }
 
-    private List<EmbeddingProfile> loadWriteProfiles() {
+    private List<WriteProfile> loadWriteProfiles() {
         String sql = """
                 select profile_key, model_name, dimension, vector_type, storage_table
                   from indexing.embedding_profile
@@ -95,8 +95,8 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
         return jdbcTemplate.query(sql, this::mapProfile);
     }
 
-    private EmbeddingProfile mapProfile(ResultSet rs, int rowNum) throws SQLException {
-        return new EmbeddingProfile(
+    private WriteProfile mapProfile(ResultSet rs, int rowNum) throws SQLException {
+        return new WriteProfile(
                 rs.getString("profile_key"),
                 rs.getString("model_name"),
                 rs.getInt("dimension"),
@@ -158,18 +158,11 @@ public class SpringAiPgVectorIndexService implements VectorIndexService {
         return projected;
     }
 
-    private String buildEmbeddingInput(PendingChunk chunk) {
-        return "法规名称：" + nullSafe(chunk.lawName())
-                + "\n章节：" + nullSafe(chunk.chapterTitle()) + " / " + nullSafe(chunk.sectionTitle())
-                + "\n条款：" + nullSafe(chunk.articleNo())
-                + "\n正文：" + nullSafe(chunk.content());
-    }
-
     private String nullSafe(String text) {
         return text == null ? "" : text;
     }
 
-    private record EmbeddingProfile(
+    private record WriteProfile(
             String profileKey,
             String modelName,
             int dimension,

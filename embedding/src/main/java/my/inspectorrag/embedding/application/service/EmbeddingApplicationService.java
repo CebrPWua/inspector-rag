@@ -1,7 +1,11 @@
 package my.inspectorrag.embedding.application.service;
 
 import my.inspectorrag.embedding.application.command.EmbedTaskCommand;
+import my.inspectorrag.embedding.domain.model.EmbedExecution;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
+import my.inspectorrag.embedding.domain.model.value.DocumentId;
+import my.inspectorrag.embedding.domain.model.value.EmbeddingStatus;
+import my.inspectorrag.embedding.domain.model.value.TaskId;
 import my.inspectorrag.embedding.domain.repository.EmbeddingRepository;
 import my.inspectorrag.embedding.domain.service.VectorIndexService;
 import my.inspectorrag.embedding.interfaces.dto.EmbedTaskResponse;
@@ -26,23 +30,29 @@ public class EmbeddingApplicationService {
 
     @Transactional
     public EmbedTaskResponse embed(EmbedTaskCommand command) {
-        embeddingRepository.markTaskStatus(command.taskId(), "processing", null);
+        var execution = EmbedExecution.create(
+                TaskId.of(command.taskId()),
+                DocumentId.of(command.docId())
+        );
+        embeddingRepository.markTaskStarted(execution);
 
         try {
-            List<PendingChunk> chunks = embeddingRepository.findPendingChunks(command.docId(), 500);
+            List<PendingChunk> chunks = embeddingRepository.findPendingChunks(execution.docId(), 500);
 
             int processed = 0;
             for (PendingChunk chunk : chunks) {
-                embeddingRepository.markChunkStatus(chunk.chunkId(), "processing");
+                embeddingRepository.markChunkStatus(chunk.chunkId(), EmbeddingStatus.PROCESSING);
                 vectorIndexService.upsert(chunk);
-                embeddingRepository.markChunkStatus(chunk.chunkId(), "success");
+                embeddingRepository.markChunkStatus(chunk.chunkId(), EmbeddingStatus.SUCCESS);
                 processed++;
             }
 
-            embeddingRepository.markTaskStatus(command.taskId(), "success", null);
+            execution = execution.complete(processed);
+            embeddingRepository.markTaskCompleted(execution);
             return new EmbedTaskResponse(command.taskId(), command.docId(), processed);
         } catch (Exception ex) {
-            embeddingRepository.markTaskStatus(command.taskId(), "failed", ex.getMessage());
+            execution = execution.fail(ex.getMessage());
+            embeddingRepository.markTaskFailed(execution);
             throw ex;
         }
     }

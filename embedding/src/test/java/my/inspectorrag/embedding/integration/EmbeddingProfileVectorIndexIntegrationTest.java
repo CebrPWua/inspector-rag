@@ -1,6 +1,7 @@
 package my.inspectorrag.embedding.integration;
 
 import my.inspectorrag.embedding.domain.model.PendingChunk;
+import my.inspectorrag.embedding.domain.model.value.ChunkId;
 import my.inspectorrag.embedding.infrastructure.gateway.SpringAiPgVectorIndexService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -100,7 +101,7 @@ class EmbeddingProfileVectorIndexIntegrationTest {
     @Test
     void upsertShouldProjectToProfileDimensionsAndWriteAllEnabledProfiles() {
         PendingChunk chunk = new PendingChunk(
-                1001L,
+                ChunkId.of(1001L),
                 "法规A",
                 "章节A",
                 "小节A",

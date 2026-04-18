@@ -1,14 +1,22 @@
 package my.inspectorrag.embedding.domain.repository;
 
+import my.inspectorrag.embedding.domain.model.EmbedExecution;
 import my.inspectorrag.embedding.domain.model.PendingChunk;
+import my.inspectorrag.embedding.domain.model.value.ChunkId;
+import my.inspectorrag.embedding.domain.model.value.DocumentId;
+import my.inspectorrag.embedding.domain.model.value.EmbeddingStatus;
 
 import java.util.List;
 
 public interface EmbeddingRepository {
 
-    void markTaskStatus(Long taskId, String status, String errorMsg);
+    void markTaskStarted(EmbedExecution execution);
 
-    List<PendingChunk> findPendingChunks(Long docId, int limit);
+    void markTaskCompleted(EmbedExecution execution);
 
-    void markChunkStatus(Long chunkId, String status);
+    void markTaskFailed(EmbedExecution execution);
+
+    List<PendingChunk> findPendingChunks(DocumentId docId, int limit);
+
+    void markChunkStatus(ChunkId chunkId, EmbeddingStatus status);
 }
