@@ -12,7 +12,12 @@ public record FileDetailRow(
         String parseStatus,
         String sourceFileName,
         String fileHash,
+        Long fileId,
         String storagePath,
+        String mimeType,
+        Long fileSizeBytes,
+        String fileSha256,
+        String uploadBatchNo,
         OffsetDateTime createdAt
 ) {
 }

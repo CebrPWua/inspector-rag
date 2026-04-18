@@ -1,9 +1,22 @@
 package my.inspectorrag.filemanagement.application.service;
 
 import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
-import my.inspectorrag.filemanagement.domain.model.FileDetail;
-import my.inspectorrag.filemanagement.domain.model.FileListItem;
-import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
+import my.inspectorrag.filemanagement.application.query.model.FileDetailView;
+import my.inspectorrag.filemanagement.application.query.model.FileListItemView;
+import my.inspectorrag.filemanagement.application.query.repository.FileQueryRepository;
+import my.inspectorrag.filemanagement.domain.model.DocumentFile;
+import my.inspectorrag.filemanagement.domain.model.LawDocument;
+import my.inspectorrag.filemanagement.domain.model.value.DocType;
+import my.inspectorrag.filemanagement.domain.model.value.DocumentId;
+import my.inspectorrag.filemanagement.domain.model.value.DocumentStatus;
+import my.inspectorrag.filemanagement.domain.model.value.FileHash;
+import my.inspectorrag.filemanagement.domain.model.value.FileSizeBytes;
+import my.inspectorrag.filemanagement.domain.model.value.LawName;
+import my.inspectorrag.filemanagement.domain.model.value.MimeType;
+import my.inspectorrag.filemanagement.domain.model.value.SourceFileName;
+import my.inspectorrag.filemanagement.domain.model.value.StoragePath;
+import my.inspectorrag.filemanagement.domain.model.value.UploadBatchNo;
+import my.inspectorrag.filemanagement.domain.repository.DocumentAggregateRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
 import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.FileDetailResponse;
@@ -27,16 +40,19 @@ public class FileApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(FileApplicationService.class);
 
-    private final DocumentRepository documentRepository;
+    private final DocumentAggregateRepository documentAggregateRepository;
+    private final FileQueryRepository fileQueryRepository;
     private final ObjectStorageGateway objectStorageGateway;
     private final FileHashService fileHashService;
 
     public FileApplicationService(
-            DocumentRepository documentRepository,
+            DocumentAggregateRepository documentAggregateRepository,
+            FileQueryRepository fileQueryRepository,
             ObjectStorageGateway objectStorageGateway,
             FileHashService fileHashService
     ) {
-        this.documentRepository = documentRepository;
+        this.documentAggregateRepository = documentAggregateRepository;
+        this.fileQueryRepository = fileQueryRepository;
         this.objectStorageGateway = objectStorageGateway;
         this.fileHashService = fileHashService;
     }
@@ -54,57 +70,48 @@ public class FileApplicationService {
             throw new IllegalArgumentException("failed to read upload file");
         }
 
-        String fileHash = fileHashService.sha256(bytes);
-        Optional<Long> duplicateDocId = documentRepository.findDocIdByFileHash(fileHash);
+        FileHash fileHash = FileHash.of(fileHashService.sha256(bytes));
+        Optional<DocumentId> duplicateDocId = documentAggregateRepository.findDocIdByFileHash(fileHash);
         if (duplicateDocId.isPresent()) {
-            return new UploadFileResponse(toIdString(duplicateDocId.get()), true, null);
-        }
-        String effectiveLawCode = normalizeOptional(command.lawCode());
-        if (effectiveLawCode == null) {
-            effectiveLawCode = fileHash;
-        }
-        String effectiveVersionNo = normalizeOptional(command.versionNo());
-        if (effectiveVersionNo == null) {
-            effectiveVersionNo = "v1";
+            return new UploadFileResponse(toIdString(duplicateDocId.get().value()), true, null);
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        Long docId = newId();
-        String sourceFileName = StringUtils.hasText(command.file().getOriginalFilename())
-                ? command.file().getOriginalFilename()
-                : "upload.bin";
-        String storagePath = objectStorageGateway.save(docId, sourceFileName, bytes);
+        DocumentId docId = DocumentId.of(newId());
+        SourceFileName sourceFileName = SourceFileName.of(
+                StringUtils.hasText(command.file().getOriginalFilename()) ? command.file().getOriginalFilename() : "upload.bin"
+        );
+        String storagePath = objectStorageGateway.save(docId.value(), sourceFileName.value(), bytes);
 
-        documentRepository.insertSourceDocument(
+        DocumentFile primaryFile = DocumentFile.createPrimaryForUpload(
+                newId(),
+                StoragePath.of(storagePath),
+                MimeType.of(command.file().getContentType() == null ? "application/octet-stream" : command.file().getContentType()),
+                FileSizeBytes.of(bytes.length),
+                fileHash,
+                UploadBatchNo.ofNullable(UUID.randomUUID().toString().replace("-", ""))
+        );
+
+        LawDocument lawDocument = LawDocument.createForUpload(
                 docId,
-                command.lawName(),
-                effectiveLawCode,
-                command.docType(),
+                LawName.of(command.lawName()),
+                command.lawCode(),
+                DocType.of(command.docType()),
                 sourceFileName,
                 fileHash,
-                effectiveVersionNo,
-                command.status(),
-                now
+                command.versionNo(),
+                DocumentStatus.from(command.status()),
+                primaryFile
         );
 
-        documentRepository.insertDocumentFile(
-                newId(),
-                docId,
-                storagePath,
-                command.file().getContentType() == null ? "application/octet-stream" : command.file().getContentType(),
-                bytes.length,
-                fileHash,
-                UUID.randomUUID().toString().replace("-", ""),
-                now
-        );
-
-        Long taskId = documentRepository.createImportTask(newId(), docId, "parse", now);
-        return new UploadFileResponse(toIdString(docId), false, toIdString(taskId));
+        OffsetDateTime now = OffsetDateTime.now();
+        documentAggregateRepository.saveForUpload(lawDocument, now);
+        Long taskId = documentAggregateRepository.createImportTask(newId(), docId, "parse", now);
+        return new UploadFileResponse(toIdString(docId.value()), false, toIdString(taskId));
     }
 
     @Transactional(readOnly = true)
     public FileDetailResponse getFile(Long docId) {
-        FileDetail detail = documentRepository.findFileDetail(docId)
+        FileDetailView detail = fileQueryRepository.findFileDetail(docId)
                 .orElseThrow(() -> new IllegalArgumentException("document not found: " + docId));
         return new FileDetailResponse(
                 toIdString(detail.docId()),
@@ -124,7 +131,7 @@ public class FileApplicationService {
     @Transactional(readOnly = true)
     public List<FileListItemResponse> listFiles(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 500));
-        List<FileListItem> items = documentRepository.listFiles(safeLimit);
+        List<FileListItemView> items = fileQueryRepository.listFiles(safeLimit);
         return items.stream()
                 .map(item -> new FileListItemResponse(
                         toIdString(item.docId()),
@@ -141,33 +148,32 @@ public class FileApplicationService {
 
     @Transactional
     public void deleteFile(Long docId) {
-        FileDetail detail = documentRepository.findFileDetail(docId)
+        DocumentId documentId = DocumentId.of(docId);
+        LawDocument document = documentAggregateRepository.findById(documentId)
                 .orElseThrow(() -> new IllegalArgumentException("document not found: " + docId));
 
-        if ("pending".equals(detail.parseStatus()) || "processing".equals(detail.parseStatus())) {
-            throw new IllegalArgumentException("document is being parsed and cannot be deleted: " + docId);
-        }
+        document.ensureDeletable();
 
-        documentRepository.deleteVectorsByDocId(docId);
-        int affected = documentRepository.deleteSourceDocument(docId);
+        documentAggregateRepository.deleteVectorsByDocId(documentId);
+        int affected = documentAggregateRepository.deleteSourceDocument(documentId);
         if (affected <= 0) {
             throw new IllegalArgumentException("document not found: " + docId);
         }
 
+        String storagePath = document.primaryFileOptional()
+                .map(DocumentFile::storagePath)
+                .map(StoragePath::value)
+                .orElse(null);
         try {
-            objectStorageGateway.delete(detail.storagePath());
+            objectStorageGateway.delete(storagePath);
         } catch (Exception ex) {
             // Best effort cleanup for object storage; DB deletion should remain successful.
-            log.warn("failed to delete storage object for docId={}, storagePath={}", docId, detail.storagePath(), ex);
+            log.warn("failed to delete storage object for docId={}, storagePath={}", docId, storagePath, ex);
         }
     }
 
     private String toIdString(Long id) {
         return id == null ? null : String.valueOf(id);
-    }
-
-    private String normalizeOptional(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
     }
 
     private Long newId() {

@@ -1,9 +1,25 @@
 package my.inspectorrag.filemanagement.application.service;
 
 import my.inspectorrag.filemanagement.application.command.UploadLawFileCommand;
-import my.inspectorrag.filemanagement.domain.model.FileDetail;
-import my.inspectorrag.filemanagement.domain.model.FileListItem;
-import my.inspectorrag.filemanagement.domain.repository.DocumentRepository;
+import my.inspectorrag.filemanagement.application.query.model.FileDetailView;
+import my.inspectorrag.filemanagement.application.query.model.FileListItemView;
+import my.inspectorrag.filemanagement.application.query.repository.FileQueryRepository;
+import my.inspectorrag.filemanagement.domain.model.DocumentFile;
+import my.inspectorrag.filemanagement.domain.model.LawDocument;
+import my.inspectorrag.filemanagement.domain.model.value.DocType;
+import my.inspectorrag.filemanagement.domain.model.value.DocumentId;
+import my.inspectorrag.filemanagement.domain.model.value.DocumentStatus;
+import my.inspectorrag.filemanagement.domain.model.value.FileHash;
+import my.inspectorrag.filemanagement.domain.model.value.FileSizeBytes;
+import my.inspectorrag.filemanagement.domain.model.value.LawCode;
+import my.inspectorrag.filemanagement.domain.model.value.LawName;
+import my.inspectorrag.filemanagement.domain.model.value.MimeType;
+import my.inspectorrag.filemanagement.domain.model.value.ParseStatus;
+import my.inspectorrag.filemanagement.domain.model.value.SourceFileName;
+import my.inspectorrag.filemanagement.domain.model.value.StoragePath;
+import my.inspectorrag.filemanagement.domain.model.value.UploadBatchNo;
+import my.inspectorrag.filemanagement.domain.model.value.VersionNo;
+import my.inspectorrag.filemanagement.domain.repository.DocumentAggregateRepository;
 import my.inspectorrag.filemanagement.domain.service.FileHashService;
 import my.inspectorrag.filemanagement.domain.service.ObjectStorageGateway;
 import my.inspectorrag.filemanagement.interfaces.dto.UploadFileResponse;
@@ -26,7 +42,9 @@ import static org.mockito.Mockito.*;
 class FileApplicationServiceTest {
 
     @Mock
-    private DocumentRepository documentRepository;
+    private DocumentAggregateRepository documentAggregateRepository;
+    @Mock
+    private FileQueryRepository fileQueryRepository;
     @Mock
     private ObjectStorageGateway objectStorageGateway;
     @Mock
@@ -34,117 +52,91 @@ class FileApplicationServiceTest {
 
     @Test
     void uploadShouldReturnDuplicateWhenFileHashExists() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
-        when(fileHashService.sha256(any())).thenReturn("hash1");
-        when(documentRepository.findDocIdByFileHash("hash1")).thenReturn(Optional.of(1001L));
+        when(fileHashService.sha256(any())).thenReturn(hex('a'));
+        when(documentAggregateRepository.findDocIdByFileHash(any(FileHash.class))).thenReturn(Optional.of(DocumentId.of(1001L)));
 
         UploadFileResponse response = service.upload(new UploadLawFileCommand(file, "法规", "LAW-1", "v1", "standard", "active"));
 
         assertTrue(response.duplicate());
         assertEquals("1001", response.docId());
         assertNull(response.parseTaskId());
-        verify(documentRepository, never()).insertSourceDocument(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        verify(documentAggregateRepository, never()).saveForUpload(any(), any());
+        verify(documentAggregateRepository, never()).createImportTask(anyLong(), any(DocumentId.class), anyString(), any());
     }
 
     @Test
     void uploadShouldCreateDocumentAndParseTaskWhenNewFile() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
-        when(fileHashService.sha256(any())).thenReturn("hash2");
-        when(documentRepository.findDocIdByFileHash("hash2")).thenReturn(Optional.empty());
+        when(fileHashService.sha256(any())).thenReturn(hex('b'));
+        when(documentAggregateRepository.findDocIdByFileHash(any(FileHash.class))).thenReturn(Optional.empty());
         when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
-        when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9001L);
+        when(documentAggregateRepository.createImportTask(anyLong(), any(DocumentId.class), eq("parse"), any())).thenReturn(9001L);
 
         UploadFileResponse response = service.upload(new UploadLawFileCommand(file, "法规", "LAW-2", "v1", "standard", "active"));
 
         assertFalse(response.duplicate());
         assertNotNull(response.docId());
         assertEquals("9001", response.parseTaskId());
-        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
-        verify(documentRepository, times(1)).insertSourceDocument(
-                anyLong(),
-                anyString(),
-                lawCodeCaptor.capture(),
-                anyString(),
-                anyString(),
-                eq("hash2"),
-                versionNoCaptor.capture(),
-                anyString(),
-                any()
-        );
-        assertEquals("LAW-2", lawCodeCaptor.getValue());
-        assertEquals("v1", versionNoCaptor.getValue());
-        verify(documentRepository, times(1)).insertDocumentFile(anyLong(), anyLong(), anyString(), anyString(), anyLong(), anyString(), anyString(), any());
+
+        ArgumentCaptor<LawDocument> aggregateCaptor = ArgumentCaptor.forClass(LawDocument.class);
+        verify(documentAggregateRepository, times(1)).saveForUpload(aggregateCaptor.capture(), any());
+        LawDocument saved = aggregateCaptor.getValue();
+        assertEquals("LAW-2", saved.lawCode().value());
+        assertEquals("v1", saved.versionNo().value());
+        assertEquals(ParseStatus.PENDING, saved.parseStatus());
+        assertNotNull(saved.primaryFile());
+        assertEquals(hex('b'), saved.primaryFile().sha256().value());
     }
 
     @Test
     void uploadShouldFallbackLawCodeToFileHashAndVersionToV1WhenMissing() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
-        when(fileHashService.sha256(any())).thenReturn("hash3");
-        when(documentRepository.findDocIdByFileHash("hash3")).thenReturn(Optional.empty());
+        when(fileHashService.sha256(any())).thenReturn(hex('c'));
+        when(documentAggregateRepository.findDocIdByFileHash(any(FileHash.class))).thenReturn(Optional.empty());
         when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
-        when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9002L);
+        when(documentAggregateRepository.createImportTask(anyLong(), any(DocumentId.class), eq("parse"), any())).thenReturn(9002L);
 
         service.upload(new UploadLawFileCommand(file, "法规", null, null, "standard", "active"));
 
-        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
-        verify(documentRepository).insertSourceDocument(
-                anyLong(),
-                anyString(),
-                lawCodeCaptor.capture(),
-                anyString(),
-                anyString(),
-                eq("hash3"),
-                versionNoCaptor.capture(),
-                anyString(),
-                any()
-        );
-        assertEquals("hash3", lawCodeCaptor.getValue());
-        assertEquals("v1", versionNoCaptor.getValue());
+        ArgumentCaptor<LawDocument> aggregateCaptor = ArgumentCaptor.forClass(LawDocument.class);
+        verify(documentAggregateRepository).saveForUpload(aggregateCaptor.capture(), any());
+        LawDocument saved = aggregateCaptor.getValue();
+        assertEquals(hex('c'), saved.lawCode().value());
+        assertEquals("v1", saved.versionNo().value());
     }
 
     @Test
     void uploadShouldFallbackWhenLawCodeAndVersionAreBlank() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         MockMultipartFile file = new MockMultipartFile("file", "law.txt", "text/plain", "abc".getBytes());
 
-        when(fileHashService.sha256(any())).thenReturn("hash4");
-        when(documentRepository.findDocIdByFileHash("hash4")).thenReturn(Optional.empty());
+        when(fileHashService.sha256(any())).thenReturn(hex('d'));
+        when(documentAggregateRepository.findDocIdByFileHash(any(FileHash.class))).thenReturn(Optional.empty());
         when(objectStorageGateway.save(anyLong(), anyString(), any())).thenReturn("/tmp/f-law.txt");
-        when(documentRepository.createImportTask(anyLong(), anyLong(), eq("parse"), any())).thenReturn(9003L);
+        when(documentAggregateRepository.createImportTask(anyLong(), any(DocumentId.class), eq("parse"), any())).thenReturn(9003L);
 
         service.upload(new UploadLawFileCommand(file, "法规", "   ", "   ", "standard", "active"));
 
-        ArgumentCaptor<String> lawCodeCaptor = ArgumentCaptor.forClass(String.class);
-        ArgumentCaptor<String> versionNoCaptor = ArgumentCaptor.forClass(String.class);
-        verify(documentRepository).insertSourceDocument(
-                anyLong(),
-                anyString(),
-                lawCodeCaptor.capture(),
-                anyString(),
-                anyString(),
-                eq("hash4"),
-                versionNoCaptor.capture(),
-                anyString(),
-                any()
-        );
-        assertEquals("hash4", lawCodeCaptor.getValue());
-        assertEquals("v1", versionNoCaptor.getValue());
+        ArgumentCaptor<LawDocument> aggregateCaptor = ArgumentCaptor.forClass(LawDocument.class);
+        verify(documentAggregateRepository).saveForUpload(aggregateCaptor.capture(), any());
+        LawDocument saved = aggregateCaptor.getValue();
+        assertEquals(hex('d'), saved.lawCode().value());
+        assertEquals("v1", saved.versionNo().value());
     }
 
     @Test
-    void getFileShouldMapDomainToDto() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+    void getFileShouldMapQueryViewToDto() {
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         OffsetDateTime now = OffsetDateTime.now();
-        when(documentRepository.findFileDetail(77L)).thenReturn(Optional.of(
-                new FileDetail(77L, "法规", "LAW", "standard", "v1", "active", "pending", "law.txt", "hash", "/tmp/law.txt", now)
+        when(fileQueryRepository.findFileDetail(77L)).thenReturn(Optional.of(
+                new FileDetailView(77L, "法规", "LAW", "standard", "v1", "active", "pending", "law.txt", hex('e'), "/tmp/law.txt", now)
         ));
 
         var dto = service.getFile(77L);
@@ -156,11 +148,11 @@ class FileApplicationServiceTest {
     }
 
     @Test
-    void listFilesShouldMapDomainToDto() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
+    void listFilesShouldMapQueryViewToDto() {
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
         OffsetDateTime now = OffsetDateTime.now();
-        when(documentRepository.listFiles(200)).thenReturn(List.of(
-                new FileListItem(88L, "法规B", "LAW-B", "regulation", "v2", "active", "success", now)
+        when(fileQueryRepository.listFiles(200)).thenReturn(List.of(
+                new FileListItemView(88L, "法规B", "LAW-B", "regulation", "v2", "active", "success", now)
         ));
 
         var list = service.listFiles(200);
@@ -173,61 +165,84 @@ class FileApplicationServiceTest {
 
     @Test
     void deleteShouldFailWhenDocumentNotExists() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
-        when(documentRepository.findFileDetail(100L)).thenReturn(Optional.empty());
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
+        when(documentAggregateRepository.findById(any(DocumentId.class))).thenReturn(Optional.empty());
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.deleteFile(100L));
 
         assertTrue(ex.getMessage().contains("document not found"));
-        verify(documentRepository, never()).deleteVectorsByDocId(anyLong());
-        verify(documentRepository, never()).deleteSourceDocument(anyLong());
+        verify(documentAggregateRepository, never()).deleteVectorsByDocId(any(DocumentId.class));
+        verify(documentAggregateRepository, never()).deleteSourceDocument(any(DocumentId.class));
     }
 
     @Test
     void deleteShouldFailWhenParseIsPendingOrProcessing() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
-        OffsetDateTime now = OffsetDateTime.now();
-        when(documentRepository.findFileDetail(101L)).thenReturn(Optional.of(
-                new FileDetail(101L, "法规", "LAW", "standard", "v1", "active", "processing", "law.txt", "hash", "/tmp/law.txt", now)
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
+        when(documentAggregateRepository.findById(any(DocumentId.class))).thenReturn(Optional.of(
+                aggregateWithStatus(101L, ParseStatus.PROCESSING, "/tmp/law.txt")
         ));
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () -> service.deleteFile(101L));
 
         assertTrue(ex.getMessage().contains("cannot be deleted"));
-        verify(documentRepository, never()).deleteVectorsByDocId(anyLong());
-        verify(documentRepository, never()).deleteSourceDocument(anyLong());
+        verify(documentAggregateRepository, never()).deleteVectorsByDocId(any(DocumentId.class));
+        verify(documentAggregateRepository, never()).deleteSourceDocument(any(DocumentId.class));
         verify(objectStorageGateway, never()).delete(anyString());
     }
 
     @Test
     void deleteShouldCleanupVectorsDocumentAndStorageWhenParseFinished() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
-        OffsetDateTime now = OffsetDateTime.now();
-        when(documentRepository.findFileDetail(102L)).thenReturn(Optional.of(
-                new FileDetail(102L, "法规", "LAW", "standard", "v1", "active", "success", "law.txt", "hash", "/tmp/law.txt", now)
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
+        when(documentAggregateRepository.findById(any(DocumentId.class))).thenReturn(Optional.of(
+                aggregateWithStatus(102L, ParseStatus.SUCCESS, "/tmp/law.txt")
         ));
-        when(documentRepository.deleteSourceDocument(102L)).thenReturn(1);
+        when(documentAggregateRepository.deleteSourceDocument(any(DocumentId.class))).thenReturn(1);
 
         service.deleteFile(102L);
 
-        verify(documentRepository).deleteVectorsByDocId(102L);
-        verify(documentRepository).deleteSourceDocument(102L);
+        verify(documentAggregateRepository).deleteVectorsByDocId(DocumentId.of(102L));
+        verify(documentAggregateRepository).deleteSourceDocument(DocumentId.of(102L));
         verify(objectStorageGateway).delete("/tmp/law.txt");
     }
 
     @Test
     void deleteShouldNotRollbackWhenStorageDeletionFails() {
-        FileApplicationService service = new FileApplicationService(documentRepository, objectStorageGateway, fileHashService);
-        OffsetDateTime now = OffsetDateTime.now();
-        when(documentRepository.findFileDetail(103L)).thenReturn(Optional.of(
-                new FileDetail(103L, "法规", "LAW", "standard", "v1", "active", "failed", "law.txt", "hash", "/tmp/law.txt", now)
+        FileApplicationService service = new FileApplicationService(documentAggregateRepository, fileQueryRepository, objectStorageGateway, fileHashService);
+        when(documentAggregateRepository.findById(any(DocumentId.class))).thenReturn(Optional.of(
+                aggregateWithStatus(103L, ParseStatus.FAILED, "/tmp/law.txt")
         ));
-        when(documentRepository.deleteSourceDocument(103L)).thenReturn(1);
+        when(documentAggregateRepository.deleteSourceDocument(any(DocumentId.class))).thenReturn(1);
         doThrow(new IllegalArgumentException("storage failed")).when(objectStorageGateway).delete("/tmp/law.txt");
 
         assertDoesNotThrow(() -> service.deleteFile(103L));
-        verify(documentRepository).deleteVectorsByDocId(103L);
-        verify(documentRepository).deleteSourceDocument(103L);
+        verify(documentAggregateRepository).deleteVectorsByDocId(DocumentId.of(103L));
+        verify(documentAggregateRepository).deleteSourceDocument(DocumentId.of(103L));
         verify(objectStorageGateway).delete("/tmp/law.txt");
+    }
+
+    private LawDocument aggregateWithStatus(Long docId, ParseStatus parseStatus, String storagePath) {
+        return LawDocument.rehydrate(
+                DocumentId.of(docId),
+                LawName.of("法规"),
+                LawCode.of("LAW"),
+                DocType.of("standard"),
+                VersionNo.of("v1"),
+                DocumentStatus.ACTIVE,
+                parseStatus,
+                SourceFileName.of("law.txt"),
+                FileHash.of(hex('f')),
+                DocumentFile.rehydrate(
+                        9001L,
+                        StoragePath.of(storagePath),
+                        MimeType.of("text/plain"),
+                        FileSizeBytes.of(3),
+                        FileHash.of(hex('f')),
+                        UploadBatchNo.ofNullable("batch-1")
+                )
+        );
+    }
+
+    private String hex(char c) {
+        return String.valueOf(c).repeat(64);
     }
 }

@@ -1,8 +1,8 @@
-package my.inspectorrag.filemanagement.domain.model;
+package my.inspectorrag.filemanagement.application.query.model;
 
 import java.time.OffsetDateTime;
 
-public record FileListItem(
+public record FileDetailView(
         Long docId,
         String lawName,
         String lawCode,
@@ -10,6 +10,9 @@ public record FileListItem(
         String versionNo,
         String status,
         String parseStatus,
+        String sourceFileName,
+        String fileHash,
+        String storagePath,
         OffsetDateTime createdAt
 ) {
 }
