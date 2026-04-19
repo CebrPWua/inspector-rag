@@ -69,6 +69,18 @@ public interface TaskCommandMapper {
     );
 
     @Update("""
+            update ingest.source_document d
+               set parse_status = 'failed',
+                   updated_at = now()
+              from ops.import_task t
+             where t.id = #{taskId}
+               and t.task_type = 'parse'
+               and d.id = t.doc_id
+               and d.parse_status in ('pending', 'processing')
+            """)
+    void markParseDocumentFailedForDeadLetter(@Param("taskId") Long taskId);
+
+    @Update("""
             update ops.import_task
                set task_status = 'pending',
                    error_msg = null,
@@ -77,6 +89,18 @@ public interface TaskCommandMapper {
              where id = #{taskId}
             """)
     void retryTask(@Param("taskId") Long taskId);
+
+    @Update("""
+            update ingest.source_document d
+               set parse_status = 'pending',
+                   updated_at = now()
+              from ops.import_task t
+             where t.id = #{taskId}
+               and t.task_type = 'parse'
+               and d.id = t.doc_id
+               and d.parse_status = 'failed'
+            """)
+    void markParseDocumentPendingForRetry(@Param("taskId") Long taskId);
 
     @Update("""
             update ops.dead_letter_task

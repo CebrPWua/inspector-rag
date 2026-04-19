@@ -21,6 +21,7 @@ public class TaskOpsService {
     public void retry(Long taskId) {
         taskRepository.retryTask(taskId);
         taskRepository.markDeadLetterProcessingByTaskId(taskId);
+        taskRepository.markParseDocumentPendingForRetry(taskId);
     }
 
     @Transactional

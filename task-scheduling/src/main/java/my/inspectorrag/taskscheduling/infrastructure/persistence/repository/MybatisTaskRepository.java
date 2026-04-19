@@ -74,6 +74,16 @@ public class MybatisTaskRepository implements TaskRepository {
     }
 
     @Override
+    public void markParseDocumentFailedForDeadLetter(Long taskId) {
+        commandMapper.markParseDocumentFailedForDeadLetter(taskId);
+    }
+
+    @Override
+    public void markParseDocumentPendingForRetry(Long taskId) {
+        commandMapper.markParseDocumentPendingForRetry(taskId);
+    }
+
+    @Override
     public List<DeadLetterTask> listDeadLetterTasks() {
         return queryMapper.listDeadLetterTasks().stream()
                 .map(row -> new DeadLetterTask(

@@ -17,6 +17,9 @@ import styles from './index.module.css'
 const { Title, Text } = Typography
 const { Dragger } = Upload
 
+const MAX_UPLOAD_BYTES = 1024 * 1024 * 1024
+const MAX_UPLOAD_HINT = '1GB'
+
 const PARSE_STATUS_BADGE: Record<string, { status: 'success' | 'processing' | 'error' | 'default' | 'warning'; text: string }> = {
   success: { status: 'success', text: '解析成功' },
   processing: { status: 'processing', text: '解析中' },
@@ -60,10 +63,18 @@ export default function FileManagementPage() {
     },
   })
 
+  const showFileTooLargeMsg = () => {
+    message.error(`上传文件过大，单文件最大 ${MAX_UPLOAD_HINT}`)
+  }
+
   const handleUpload = async () => {
     try {
       const values = await form.validateFields()
       if (!uploadedFileObj) { message.error('请选择文件'); return }
+      if (uploadedFileObj.size > MAX_UPLOAD_BYTES) {
+        showFileTooLargeMsg()
+        return
+      }
       const fd = new FormData()
       fd.append('file', uploadedFileObj)
       fd.append('lawName', values.lawName)
@@ -209,14 +220,22 @@ export default function FileManagementPage() {
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item label="法规文件" required>
             <Dragger
-              beforeUpload={(file) => { setUploadedFileObj(file); return false }}
+              beforeUpload={(file) => {
+                if (file.size > MAX_UPLOAD_BYTES) {
+                  showFileTooLargeMsg()
+                  setUploadedFileObj(null)
+                  return Upload.LIST_IGNORE
+                }
+                setUploadedFileObj(file)
+                return false
+              }}
               onRemove={() => setUploadedFileObj(null)}
               maxCount={1}
               accept=".pdf,.doc,.docx"
             >
               <p className="ant-upload-drag-icon"><InboxOutlined /></p>
               <p>点击或拖拽文件至此区域上传</p>
-              <p style={{ color: '#999', fontSize: 12 }}>支持 PDF、DOC、DOCX 格式</p>
+              <p style={{ color: '#999', fontSize: 12 }}>支持 PDF、DOC、DOCX 格式，单文件不超过 1GB</p>
             </Dragger>
           </Form.Item>
           <Form.Item name="lawName" label="法规名称" rules={[{ required: true, message: '请输入法规名称' }]}>

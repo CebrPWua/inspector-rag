@@ -1,6 +1,10 @@
 spring:
   application:
     name: file-management
+  servlet:
+    multipart:
+      max-file-size: 1GB
+      max-request-size: 1025MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/inspector_rag}
     username: ${DB_USERNAME:}

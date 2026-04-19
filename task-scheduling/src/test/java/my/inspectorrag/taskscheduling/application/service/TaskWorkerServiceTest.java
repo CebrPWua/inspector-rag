@@ -52,10 +52,11 @@ class TaskWorkerServiceTest {
         verify(taskRepository).insertRetryLog(anyLong(), eq(2L), eq(1), contains("dispatch fail"), any());
         verify(taskRepository).incrementRetry(2L, "dispatch fail");
         verify(taskRepository, never()).moveToDeadLetter(anyLong(), any(), anyString(), any());
+        verify(taskRepository, never()).markParseDocumentFailedForDeadLetter(anyLong());
     }
 
     @Test
-    void processTaskShouldMoveToDeadLetterWhenRetryExceeded() {
+    void processTaskShouldMoveToDeadLetterWhenRetryExceededForEmbedTask() {
         TaskWorkerProperties properties = new TaskWorkerProperties();
         TaskWorkerService service = new TaskWorkerService(taskRepository, taskDispatcherClient, properties);
 
@@ -67,5 +68,22 @@ class TaskWorkerServiceTest {
 
         verify(taskRepository).markTaskFailed(3L, "dispatch fail");
         verify(taskRepository).moveToDeadLetter(anyLong(), eq(task), eq("dispatch fail"), any());
+        verify(taskRepository, never()).markParseDocumentFailedForDeadLetter(anyLong());
+    }
+
+    @Test
+    void processTaskShouldMarkParseDocumentFailedWhenParseTaskMovesToDeadLetter() {
+        TaskWorkerProperties properties = new TaskWorkerProperties();
+        TaskWorkerService service = new TaskWorkerService(taskRepository, taskDispatcherClient, properties);
+
+        ImportTask task = new ImportTask(4L, 103L, "parse", "processing", 3, 3);
+        doThrow(new IllegalStateException("dispatch fail"))
+                .when(taskDispatcherClient).dispatch(task);
+
+        service.processTask(task);
+
+        verify(taskRepository).markTaskFailed(4L, "dispatch fail");
+        verify(taskRepository).moveToDeadLetter(anyLong(), eq(task), eq("dispatch fail"), any());
+        verify(taskRepository).markParseDocumentFailedForDeadLetter(4L);
     }
 }

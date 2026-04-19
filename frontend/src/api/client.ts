@@ -31,9 +31,13 @@ client.interceptors.response.use(
   (error) => {
     const status = error.response?.status
     const rawMsg = error.response?.data?.message
-    const fallback = status
-      ? `请求失败（${status}），请检查后端服务`
-      : (error.message || '网络错误，请稍后重试')
+    const fallback = status === 413
+      ? '上传文件过大，单文件最大 1GB'
+      : (
+        status
+          ? `请求失败（${status}），请检查后端服务`
+          : (error.message || '网络错误，请稍后重试')
+      )
     const msg = sanitizeMsg(rawMsg, fallback)
     message.error(msg)
     return Promise.reject(error)
