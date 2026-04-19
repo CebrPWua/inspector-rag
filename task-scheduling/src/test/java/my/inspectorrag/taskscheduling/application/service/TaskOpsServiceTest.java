@@ -24,13 +24,14 @@ class TaskOpsServiceTest {
     private TaskRepository taskRepository;
 
     @Test
-    void retryShouldSetTaskPendingAndDeadLetterProcessing() {
+    void retryShouldSetTaskPendingDeadLetterProcessingAndResetParseStatus() {
         TaskOpsService service = new TaskOpsService(taskRepository);
 
         service.retry(100L);
 
         verify(taskRepository).retryTask(100L);
         verify(taskRepository).markDeadLetterProcessingByTaskId(100L);
+        verify(taskRepository).markParseDocumentPendingForRetry(100L);
     }
 
     @Test

@@ -25,6 +25,10 @@ public interface TaskRepository {
 
     void markDeadLetterProcessingByTaskId(Long taskId);
 
+    void markParseDocumentFailedForDeadLetter(Long taskId);
+
+    void markParseDocumentPendingForRetry(Long taskId);
+
     List<DeadLetterTask> listDeadLetterTasks();
 
     Optional<DeadLetterTask> findDeadLetterTask(Long deadLetterId);

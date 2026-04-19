@@ -56,6 +56,9 @@ public class TaskWorkerService {
             if (nextRetry > task.maxRetry()) {
                 taskRepository.markTaskFailed(task.id(), message);
                 taskRepository.moveToDeadLetter(newId(), task, message, now);
+                if ("parse".equals(task.taskType())) {
+                    taskRepository.markParseDocumentFailedForDeadLetter(task.id());
+                }
             } else {
                 taskRepository.incrementRetry(task.id(), message);
             }

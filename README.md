@@ -173,6 +173,32 @@ npm run dev
 - `PATCH /api/tasks/dead-letter/{id}/status`
 - `GET /api/tasks/dead-letter`
 
+## 任务状态联动与删除规则
+
+- 文档删除接口 `DELETE /api/files/{docId}` 仅在 `parse_status in (success, failed)` 时可执行。
+- `parse` 任务超过最大重试次数并进入死信后，文档 `parse_status` 会从 `pending/processing` 收敛到 `failed`。
+- 手动调用 `POST /api/tasks/retry/{taskId}` 重试 `parse` 任务时，文档 `parse_status` 会从 `failed` 回退到 `pending`。
+
+## 历史数据回填
+
+- 迁移脚本：`src/main/resources/db/migration/V3__parse_dead_letter_backfill_parse_status.sql`
+- 适用场景：历史库中存在 `parse` 死信记录，但文档状态仍停留在 `pending/processing`。
+- 建议执行方式：随部署流程执行数据库迁移；执行后可用下列 SQL 复核是否还有残留记录。
+
+```sql
+select count(*)
+from ingest.source_document d
+where d.parse_status in ('pending','processing')
+  and exists (
+    select 1
+    from ops.dead_letter_task dl
+    join ops.import_task t on t.id = dl.task_id
+    where dl.doc_id = d.id
+      and dl.task_type = 'parse'
+      and (t.task_status = 'failed' or dl.resolution_status in ('resolved','closed'))
+  );
+```
+
 ## 数据库结构快照
 
 发布快照文件位置：
